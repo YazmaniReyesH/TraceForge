@@ -1,0 +1,25 @@
+# EditorConfig — TraceForge
+# https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Python: 4 espacios (PEP 8 / ruff)
+[*.py]
+indent_size = 4
+
+# Makefiles / Taskfile reales con tabs no aplican aquí (usamos Taskfile YAML)
+[*.{yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab

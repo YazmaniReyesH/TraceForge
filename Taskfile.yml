@@ -1,0 +1,106 @@
+# Taskfile de TraceForge — orquestación de desarrollo (go-task).
+# Fuente ÚNICA de verdad: local y CI usan exactamente estos comandos.
+# Instalar go-task: https://taskfile.dev/installation/
+#   Windows:  winget install Task.Task
+#   macOS:    brew install go-task/tap/go-task
+#   Linux:    ver instalador oficial (sh -c "$(curl ...)") o gestor de paquetes
+# Uso: `task <target>`  ·  `task --list` para ver todos.
+version: "3"
+
+silent: true
+
+tasks:
+  default:
+    desc: Lista las tareas disponibles
+    cmds:
+      - task --list
+
+  # ───────────────────────── Setup ─────────────────────────
+  setup:
+    desc: Instala dependencias de api (uv) y web (npm) desde cero
+    cmds:
+      - task: setup-api
+      - task: setup-web
+
+  setup-api:
+    desc: Instala el backend con uv (incluye Python 3.12 y grupo dev)
+    dir: apps/api
+    cmds:
+      - uv sync
+
+  setup-web:
+    desc: Instala el frontend con npm
+    dir: apps/web
+    cmds:
+      - npm install
+
+  # ───────────────────────── Dev ─────────────────────────
+  dev-api:
+    desc: Levanta la API (FastAPI) en http://127.0.0.1:8000
+    dir: apps/api
+    cmds:
+      - uv run uvicorn app.main:app --reload --port 8000
+
+  dev-web:
+    desc: Levanta el frontend (Vite) en http://127.0.0.1:5173
+    dir: apps/web
+    cmds:
+      - npm run dev
+
+  # ───────────────────────── Calidad ─────────────────────────
+  lint:
+    desc: Lint de backend (ruff) y frontend (eslint)
+    cmds:
+      - task: lint-api
+      - task: lint-web
+
+  lint-api:
+    dir: apps/api
+    cmds:
+      - uv run ruff check .
+      - uv run ruff format --check .
+
+  lint-web:
+    dir: apps/web
+    cmds:
+      - npm run lint
+      - npm run format:check
+
+  typecheck:
+    desc: Chequeo de tipos de backend (mypy) y frontend (tsc)
+    cmds:
+      - task: typecheck-api
+      - task: typecheck-web
+
+  typecheck-api:
+    dir: apps/api
+    cmds:
+      - uv run mypy
+
+  typecheck-web:
+    dir: apps/web
+    cmds:
+      - npm run typecheck
+
+  test:
+    desc: "Pruebas de backend (pytest). Frontend pendiente hasta F0-T5."
+    cmds:
+      - task: test-api
+
+  test-api:
+    dir: apps/api
+    cmds:
+      - uv run pytest
+
+  # ───────────────────────── Extra ─────────────────────────
+  build-web:
+    desc: Build de producción del frontend (lo que corre CI)
+    dir: apps/web
+    cmds:
+      - npm run build
+
+  format:
+    desc: Autoformatea backend (ruff) y frontend (prettier)
+    cmds:
+      - cd apps/api && uv run ruff format .
+      - cd apps/web && npm run format

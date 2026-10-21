@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancela ejecuciones viejas del mismo ref si llega una nueva.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (ruff · mypy · pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar go-task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Instalar uv (con Python 3.12)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Instalar dependencias del backend
+        run: task setup-api
+
+      - name: Lint (ruff)
+        run: task lint-api
+
+      - name: Typecheck (mypy)
+        run: task typecheck-api
+
+      - name: Pruebas (pytest)
+        run: task test-api
+
+  frontend:
+    name: Frontend (eslint · tsc · build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar go-task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Instalar Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: apps/web/.nvmrc
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Instalar dependencias del frontend
+        run: task setup-web
+
+      - name: Lint (eslint + prettier)
+        run: task lint-web
+
+      - name: Typecheck (tsc)
+        run: task typecheck-web
+
+      - name: Build
+        run: task build-web
