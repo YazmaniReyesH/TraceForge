@@ -1,0 +1,41 @@
+# .dockerignore — TraceForge
+# Minimiza el contexto de build de las imágenes (perfil prod, a futuro).
+
+# Control de versiones / CI
+.git
+.github
+.gitignore
+
+# Entornos y secretos (NUNCA al contexto de build)
+.env
+.env.*
+!.env.example
+
+# Python / backend
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/htmlcov/
+**/.coverage*
+
+# Node / frontend
+**/node_modules/
+**/dist/
+**/.vite/
+**/*.tsbuildinfo
+
+# Herramientas / editores
+.task/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Documentación y metadatos (no necesarios en runtime)
+docs/
+**/README.md
+CLAUDE.md

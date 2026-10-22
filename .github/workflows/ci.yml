@@ -18,6 +18,24 @@ jobs:
     defaults:
       run:
         shell: bash
+    # La base para la prueba de readiness. Mismas credenciales que el service container.
+    env:
+      TF_DATABASE_URL: postgresql+asyncpg://tf:tf_dev_password@127.0.0.1:5432/traceforge
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: tf
+          POSTGRES_PASSWORD: tf_dev_password
+          POSTGRES_DB: traceforge
+        ports:
+          # Runner efímero y aislado: mapeo simple (evita rarezas de parseo).
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tf -d traceforge"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
