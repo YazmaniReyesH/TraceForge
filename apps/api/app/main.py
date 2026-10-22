@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.auth.router import router as auth_router
 from app.core.config import Settings, get_settings
 from app.core.db import database_ready, get_engine
 
@@ -67,6 +68,8 @@ def create_app() -> FastAPI:
         if await database_ready(engine):
             return {"status": "ready"}
         return JSONResponse(status_code=503, content={"status": "not ready"})
+
+    app.include_router(auth_router)
 
     return app
 
