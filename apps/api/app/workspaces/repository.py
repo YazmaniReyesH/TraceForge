@@ -3,10 +3,10 @@
 from collections.abc import Sequence
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import Row, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Workspace, WorkspaceMembership
+from app.models import Project, ProjectMembership, User, Workspace, WorkspaceMembership
 from app.models.enums import WorkspaceRole
 
 
@@ -52,3 +52,40 @@ class WorkspaceRepository:
             .order_by(Workspace.created_at)
         )
         return (await self._session.execute(stmt)).scalars().all()
+
+    # ── Membresías de workspace ──
+    async def get_user_by_email(self, email: str) -> User | None:
+        return (
+            await self._session.execute(select(User).where(User.email == email))
+        ).scalar_one_or_none()
+
+    async def get_membership(self, workspace_id: UUID, user_id: UUID) -> WorkspaceMembership | None:
+        stmt = select(WorkspaceMembership).where(
+            WorkspaceMembership.workspace_id == workspace_id,
+            WorkspaceMembership.user_id == user_id,
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def list_members(
+        self, workspace_id: UUID
+    ) -> Sequence[Row[tuple[User, WorkspaceMembership]]]:
+        stmt = (
+            select(User, WorkspaceMembership)
+            .join(WorkspaceMembership, WorkspaceMembership.user_id == User.user_id)
+            .where(WorkspaceMembership.workspace_id == workspace_id)
+            .order_by(User.email)
+        )
+        return (await self._session.execute(stmt)).all()
+
+    async def delete_membership(self, membership: WorkspaceMembership) -> None:
+        await self._session.delete(membership)
+
+    async def delete_project_memberships_for_user(self, workspace_id: UUID, user_id: UUID) -> None:
+        """Quita las membresías de proyecto del usuario DENTRO de este workspace."""
+        project_ids = select(Project.project_id).where(Project.workspace_id == workspace_id)
+        await self._session.execute(
+            delete(ProjectMembership).where(
+                ProjectMembership.user_id == user_id,
+                ProjectMembership.project_id.in_(project_ids),
+            )
+        )

@@ -2,7 +2,12 @@
 
 import pytest
 
-from app.core.security import Permission, effective_project_role, has_permission
+from app.core.security import (
+    Permission,
+    effective_project_role,
+    has_permission,
+    has_project_permission,
+)
 from app.models.enums import ProjectRole, WorkspaceRole
 
 
@@ -50,3 +55,31 @@ def test_matrix_member_reads_only() -> None:
 def test_matrix_guest_has_no_workspace_overview() -> None:
     # guest no ve el overview del workspace (ADR-0002): sin permisos a nivel workspace.
     assert not has_permission(WorkspaceRole.GUEST, Permission.WORKSPACES_READ)
+
+
+def test_workspace_matrix_project_create_and_transfer() -> None:
+    # Crear proyectos: owner/admin sí; member/guest no. Transferir propiedad: solo owner.
+    assert has_permission(WorkspaceRole.OWNER, Permission.PROJECTS_CREATE)
+    assert has_permission(WorkspaceRole.ADMIN, Permission.PROJECTS_CREATE)
+    assert not has_permission(WorkspaceRole.MEMBER, Permission.PROJECTS_CREATE)
+    assert has_permission(WorkspaceRole.OWNER, Permission.WORKSPACES_TRANSFER_OWNERSHIP)
+    assert not has_permission(WorkspaceRole.ADMIN, Permission.WORKSPACES_TRANSFER_OWNERSHIP)
+
+
+def test_project_matrix_by_role() -> None:
+    assert has_project_permission(ProjectRole.LEAD, Permission.PROJECTS_DELETE)
+    assert has_project_permission(ProjectRole.LEAD, Permission.PROJECTS_MANAGE_MEMBERS)
+    assert has_project_permission(ProjectRole.CONTRIBUTOR, Permission.PROJECTS_UPDATE)
+    assert not has_project_permission(ProjectRole.CONTRIBUTOR, Permission.PROJECTS_DELETE)
+    assert not has_project_permission(ProjectRole.CONTRIBUTOR, Permission.PROJECTS_MANAGE_MEMBERS)
+    assert has_project_permission(ProjectRole.VIEWER, Permission.PROJECTS_READ)
+    assert not has_project_permission(ProjectRole.VIEWER, Permission.PROJECTS_UPDATE)
+
+
+def test_owner_admin_get_full_project_access_via_floor() -> None:
+    # owner/admin: piso efectivo = lead -> todos los permisos de proyecto, sin membresía.
+    for ws_role in (WorkspaceRole.OWNER, WorkspaceRole.ADMIN):
+        effective = effective_project_role(ws_role, None)
+        assert effective is ProjectRole.LEAD
+        assert has_project_permission(effective, Permission.PROJECTS_DELETE)
+        assert has_project_permission(effective, Permission.PROJECTS_MANAGE_MEMBERS)

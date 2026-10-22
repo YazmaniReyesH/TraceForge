@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.auth.router import router as auth_router
 from app.core.config import Settings, get_settings
 from app.core.db import database_ready, get_engine
+from app.projects.router import router as projects_router
 from app.workspaces.router import router as workspaces_router
 
 
@@ -72,6 +73,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(workspaces_router)
+    app.include_router(projects_router)
 
     return app
 
