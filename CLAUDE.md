@@ -16,12 +16,18 @@ Repositorio: https://github.com/YazmaniReyesH/TraceForge.git
 
 | Capa | Tecnología |
 |---|---|
-| Backend | Python **3.12** + FastAPI + Pydantic v2 + (SQLAlchemy 2 / Alembic — llegan con la BD) |
+| Backend | Python **3.12** + FastAPI + Pydantic v2 + **SQLAlchemy 2 (async) + Alembic** |
 | Gestor backend | **uv** (gestiona también el Python 3.12) |
 | Frontend | React + TypeScript + **Vite** |
 | Gestor frontend | **npm** |
-| Base de datos | **PostgreSQL** (F0-T2) |
+| Base de datos | **PostgreSQL 16 + pgvector**, acceso async con **asyncpg** (ver ADR-0001) |
+| Infra de dev | **Docker Compose** (`compose.yaml`): db + **Redis 7** (Redis disponible, aún sin uso en código). **MinIO/almacenamiento: diferido** — deuda conocida |
 | Orquestación dev | **go-task** (`Taskfile.yml`) — fuente única de verdad, local y CI |
+
+> **Dev contra la infra en contenedores:** el backend y el frontend corren en el
+> **host** (uv/npm), pero el backend se conecta a la **PostgreSQL de los contenedores**.
+> Por eso `task dev-api` requiere `task up` antes. (Contenerizar api/web es de una fase
+> posterior: el perfil `prod` queda preparado en `compose.yaml`.)
 
 > Principios de IA (fundacionales, ver skill `backend-fastapi`): (1) todo contenido
 > de IA es una **sugerencia con procedencia** que nace "pendiente"; (2) la **IA
@@ -35,9 +41,12 @@ TraceForge/
   apps/
     api/        # Backend FastAPI (uv)
       app/
-        main.py              # app FastAPI + GET /health + CORS
-        core/config.py       # Settings (pydantic-settings, lee .env con prefijo TF_)
+        main.py              # app FastAPI + GET /health (liveness) + /health/ready
+        core/config.py       # Settings (pydantic-settings, prefijo TF_; DB/Redis/S3)
+        core/db.py           # engine async + sessionmaker + Base + get_session
+      migrations/            # Alembic (async); versions/ vacío hasta F0-T3
       tests/
+      alembic.ini
       pyproject.toml         # deps + ruff + mypy + pytest
       .python-version        # 3.12
     web/        # Frontend React + Vite + TS (npm)
@@ -46,12 +55,14 @@ TraceForge/
     shared/     # (placeholder) cliente TS generado desde OpenAPI — aún vacío
   docs/
     adr/        # ADRs individuales (contexto → decisión → consecuencias)
+    arquitectura.md  # índice de ADRs + panorama
+    GITHUB_WORKFLOW.md  # flujo Git/PR del proyecto
     modulos/    # fichas de módulo (_plantilla.md)
-    # (en tandas futuras: API-CONTRACT.md, arquitectura.md, ai-tasks.md,
-    #  plantillas.md, seguridad-datos.md, glosario.md, GITHUB_WORKFLOW.md)
+    # (en tandas futuras: API-CONTRACT.md, ai-tasks.md, plantillas.md,
+    #  seguridad-datos.md, glosario.md)
   .claude/skills/   # skills del proyecto (NO tocar sin acuerdo)
   .github/workflows/ci.yml
-  Taskfile.yml
+  compose.yaml · Taskfile.yml · .dockerignore
   CLAUDE.md · README.md · .editorconfig · .gitignore · .pre-commit-config.yaml
 ```
 
@@ -60,19 +71,33 @@ TraceForge/
 Requiere **go-task** instalado (Windows: `winget install Task.Task` · macOS:
 `brew install go-task/tap/go-task` · Linux: instalador oficial), más **uv** y **npm**.
 
+Requiere además **Docker** (Desktop/Engine) para la infra.
+
 | Comando | Qué hace |
 |---|---|
 | `task setup` | Instala dependencias de `api` (uv) y `web` (npm) desde cero |
-| `task dev-api` | Levanta la API en http://127.0.0.1:8000 (`/health`, `/docs`) |
+| `task up` | Levanta la infra en contenedores (db, redis) |
+| `task down` | Detiene la infra (conserva los datos) |
+| `task down-v` | Detiene la infra y **borra los volúmenes/datos** |
+| `task db-shell` | Abre `psql` dentro del contenedor de Postgres |
+| `task dev-api` | Levanta la API en http://127.0.0.1:8000 (`/health`, `/health/ready`, `/docs`) — **requiere `task up`** |
 | `task dev-web` | Levanta el frontend en http://127.0.0.1:5173 |
 | `task lint` | ruff (backend) + eslint/prettier (frontend) |
 | `task typecheck` | mypy (backend) + tsc (frontend) |
 | `task test` | pytest (backend) |
 | `task build-web` | Build de producción del frontend (lo que valida CI) |
+| `task db-revision -- "msg"` | **Genera** una migración Alembic (la revisa/aplica el equipo) |
+| `task db-upgrade` | Aplica migraciones (`alembic upgrade head`) — **la ejecuta el equipo** |
 | `task --list` | Ver todas las tareas |
 
 Primer arranque: `task setup`, copiar `apps/api/.env.example`→`.env` y
-`apps/web/.env.example`→`.env`, luego `task dev-api` y `task dev-web`.
+`apps/web/.env.example`→`.env`, `task up` (espera a que la infra esté saludable),
+luego `task dev-api` y `task dev-web`.
+
+> **Dos `.env` que deben coincidir:** `apps/api/.env` lo lee el backend
+> (`TF_DATABASE_URL`) y un `.env` en la **raíz** lo lee compose para crear la base
+> (`TF_DB_USER`/`TF_DB_PASSWORD`/`TF_DB_NAME`; opcional, con valores por defecto). Las
+> credenciales de la base deben ser las mismas en ambos o el backend no conecta.
 
 ## Documentación viva
 
@@ -86,9 +111,12 @@ La documentación vive en `docs/` y se actualiza en el **mismo PR** que el códi
 - Un ADR no se reescribe cuando cambia la realidad: se marca como *reemplazado* y se
   crea uno nuevo que lo supera.
 
+El **flujo de trabajo Git/PR** del proyecto (rama por tanda, commits, PR, merge) está
+en [`docs/GITHUB_WORKFLOW.md`](./docs/GITHUB_WORKFLOW.md).
+
 Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesita):
-`API-CONTRACT.md`, `ai-tasks.md`, `plantillas.md`, `seguridad-datos.md`, `glosario.md`,
-`GITHUB_WORKFLOW.md` y las fichas de `docs/modulos/<modulo>.md` (desde `_plantilla.md`).
+`API-CONTRACT.md`, `ai-tasks.md`, `plantillas.md`, `seguridad-datos.md`, `glosario.md`
+y las fichas de `docs/modulos/<modulo>.md` (desde `_plantilla.md`).
 
 ## Convención de trabajo (obligatoria)
 
@@ -127,6 +155,18 @@ Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesi
 
 ## Estado actual
 
-**F0-T1 (andamiaje):** monorepo + backend con `GET /health` + frontend que lo
-consume + orquestación con go-task + CI + pre-commit. **Sin** Docker, PostgreSQL,
-autenticación, modelos de datos, IA ni theming (tandas posteriores).
+**F0-T2 (infra de datos):** `compose.yaml` con PostgreSQL 16+pgvector y Redis
+(puertos en 127.0.0.1, healthchecks, volúmenes); backend conectado a Postgres (async
+asyncpg) con `GET /health/ready`; Alembic async configurado (sin migraciones aún);
+CI con service container de Postgres. **Sin** modelos de datos ni migraciones,
+autenticación/RBAC, uso real de Redis, contenerización de api/web, IA ni theming
+(tandas posteriores).
+
+> **Deuda conocida — MinIO/almacenamiento diferido:** en 2025 MinIO retiró sus
+> imágenes community de Docker Hub y su registro (quay.io) exige autenticación, por lo
+> que no se fijó una imagen. Como MinIO no se usa en código aún, `minio`/`minio-init`
+> quedan **comentados** en `compose.yaml` y las variables `TF_S3_*` quedan reservadas.
+> Se retomará (eligiendo imagen/registro) al implementar el almacenamiento real.
+
+Hecho en F0-T1: monorepo uv+npm, `GET /health`, frontend que lo consume, go-task, CI,
+pre-commit.

@@ -30,6 +30,23 @@ class Settings(BaseSettings):
     # Lista separada por comas en la variable TF_CORS_ORIGINS.
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
+    # ── PostgreSQL (único servicio cableado en código en F0-T2) ──
+    # Driver async: SQLAlchemy 2 + asyncpg. Apunta a la infra de `task up`.
+    database_url: str = "postgresql+asyncpg://tf:tf_dev_password@127.0.0.1:5432/traceforge"
+
+    # ── Redis (configuración lista, SIN uso en código todavía — fase posterior) ──
+    redis_url: str = "redis://127.0.0.1:6379/0"
+
+    # ── Almacenamiento S3 / MinIO — RESERVADO, SIN uso en código todavía ──
+    # MinIO quedó DIFERIDO en F0-T2 (ver compose.yaml): no hay servicio de
+    # almacenamiento levantado aún. Estos campos se conservan ya definidos para no
+    # reescribir la config cuando se implemente el almacenamiento; sus valores por
+    # defecto son solo placeholders hasta entonces.
+    s3_endpoint: str = "http://127.0.0.1:9000"
+    s3_access_key: str = "tf_minio"
+    s3_secret_key: str = "tf_minio_dev_password"
+    s3_bucket: str = "traceforge"
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_cors_origins(cls, value: object) -> object:

@@ -1,0 +1,130 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TraceForge — infraestructura de desarrollo (F0-T2)
+#
+# Levanta la infra de datos: PostgreSQL (con pgvector) y Redis.
+# En F0-T2 SOLO Postgres se cablea en el código del backend; Redis queda disponible
+# para fases posteriores.
+#
+# MINIO / ALMACENAMIENTO — DIFERIDO (deuda conocida): en 2025 MinIO retiró sus
+# imágenes community de Docker Hub y su registro (quay.io) exige autenticación, así
+# que no se fija una imagen ahora. Como en esta tanda MinIO NO se usa en código, los
+# servicios `minio` y `minio-init` quedan COMENTADOS más abajo; la fuente de imagen
+# y las credenciales se decidirán al implementar el almacenamiento real.
+#
+# SEGURIDAD: todos los puertos se publican SOLO en 127.0.0.1 (loopback), nunca en
+# 0.0.0.0, para que la infra no quede expuesta en la red local.
+#
+# Uso:  task up  ·  task down  ·  task down-v (¡borra datos!)
+# Las credenciales de abajo son valores de DESARROLLO. Para sobreescribirlas, crea
+# un `.env` en la raíz (NO se commitea) con TF_DB_* ; compose lo lee.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: traceforge
+
+services:
+  # ── PostgreSQL 16 + pgvector ──
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${TF_DB_NAME:-traceforge}
+      POSTGRES_USER: ${TF_DB_USER:-tf}
+      POSTGRES_PASSWORD: ${TF_DB_PASSWORD:-tf_dev_password}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TF_DB_USER:-tf} -d ${TF_DB_NAME:-traceforge}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── Redis 7 (disponible; sin uso en código todavía) ──
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # MinIO + minio-init — DIFERIDO (ver nota de cabecera). No activos en F0-T2.
+  # Al retomar el almacenamiento: elegir imagen/registro (p. ej. quay.io con
+  # `docker login`, o la que se decida) y un tag válido, reactivar el volumen
+  # `minio_data`, el bucket por defecto `traceforge` y los healthchecks; y volver a
+  # añadir el target de infra correspondiente. Puertos a publicar en 127.0.0.1.
+  #
+  # minio:
+  #   image: <registro/minio:TAG-a-decidir>
+  #   restart: unless-stopped
+  #   command: server /data --console-address ":9001"
+  #   environment:
+  #     MINIO_ROOT_USER: ${TF_MINIO_ROOT_USER:-tf_minio}
+  #     MINIO_ROOT_PASSWORD: ${TF_MINIO_ROOT_PASSWORD:-tf_minio_dev_password}
+  #   ports:
+  #     - "127.0.0.1:9000:9000"   # API S3
+  #     - "127.0.0.1:9001:9001"   # Consola web
+  #   volumes:
+  #     - minio_data:/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 10s
+  #
+  # minio-init:   # crea el bucket por defecto y termina
+  #   image: <registro/mc:TAG-a-decidir>
+  #   depends_on:
+  #     minio:
+  #       condition: service_healthy
+  #   environment:
+  #     TF_MINIO_ROOT_USER: ${TF_MINIO_ROOT_USER:-tf_minio}
+  #     TF_MINIO_ROOT_PASSWORD: ${TF_MINIO_ROOT_PASSWORD:-tf_minio_dev_password}
+  #     TF_S3_BUCKET: ${TF_S3_BUCKET:-traceforge}
+  #   entrypoint: >-
+  #     /bin/sh -c "
+  #     mc alias set local http://minio:9000 \"$${TF_MINIO_ROOT_USER}\" \"$${TF_MINIO_ROOT_PASSWORD}\" &&
+  #     mc mb --ignore-existing local/\"$${TF_S3_BUCKET}\" &&
+  #     echo 'Bucket listo: '\"$${TF_S3_BUCKET}\"
+  #     "
+  #   restart: "no"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # PERFIL prod (PREPARADO, NO ACTIVO en F0-T2)
+  # A futuro aquí vivirán los contenedores de api y web. En desarrollo siguen
+  # corriendo en el host (uv/npm). Se activa con: docker compose --profile prod up
+  # ───────────────────────────────────────────────────────────────────────────
+  # api:
+  #   build:
+  #     context: ./apps/api
+  #   profiles: ["prod"]
+  #   environment:
+  #     TF_DATABASE_URL: postgresql+asyncpg://${TF_DB_USER:-tf}:${TF_DB_PASSWORD:-tf_dev_password}@db:5432/${TF_DB_NAME:-traceforge}
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   ports:
+  #     - "127.0.0.1:8000:8000"
+  #
+  # web:
+  #   build:
+  #     context: ./apps/web
+  #   profiles: ["prod"]
+  #   depends_on:
+  #     - api
+  #   ports:
+  #     - "127.0.0.1:5173:80"
+
+volumes:
+  db_data:
+  redis_data:
+  # minio_data:   # DIFERIDO junto con el servicio minio (ver arriba)

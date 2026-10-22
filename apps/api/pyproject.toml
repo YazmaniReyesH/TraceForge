@@ -9,6 +9,9 @@ dependencies = [
     "uvicorn[standard]>=0.32,<0.33",
     "pydantic>=2.9,<3",
     "pydantic-settings>=2.6,<3",
+    "sqlalchemy[asyncio]>=2.0,<2.1",
+    "asyncpg>=0.30,<0.31",
+    "alembic>=1.14,<2",
 ]
 
 [dependency-groups]
@@ -36,6 +39,10 @@ select = ["E", "W", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Patrón idiomático de FastAPI: inyección de dependencias en los defaults.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Header"]
 
 [tool.ruff.format]
 quote-style = "double"

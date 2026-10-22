@@ -34,9 +34,30 @@ tasks:
     cmds:
       - npm install
 
+  # ───────────────────────── Infra (Docker) ─────────────────────────
+  up:
+    desc: Levanta la infra en contenedores (db, redis) en segundo plano
+    cmds:
+      - docker compose up -d
+
+  down:
+    desc: Detiene y elimina los contenedores de la infra (conserva los datos)
+    cmds:
+      - docker compose down
+
+  down-v:
+    desc: "¡BORRA DATOS! Detiene la infra y elimina también los volúmenes"
+    cmds:
+      - docker compose down -v
+
+  db-shell:
+    desc: Abre una shell psql dentro del contenedor de PostgreSQL
+    cmds:
+      - docker compose exec db psql -U "${TF_DB_USER:-tf}" -d "${TF_DB_NAME:-traceforge}"
+
   # ───────────────────────── Dev ─────────────────────────
   dev-api:
-    desc: Levanta la API (FastAPI) en http://127.0.0.1:8000
+    desc: "Levanta la API (FastAPI) en http://127.0.0.1:8000 — requiere `task up` antes"
     dir: apps/api
     cmds:
       - uv run uvicorn app.main:app --reload --port 8000
@@ -91,6 +112,21 @@ tasks:
     dir: apps/api
     cmds:
       - uv run pytest
+
+  # ───────────────────────── Migraciones (Alembic) ─────────────────────────
+  # Claude Code GENERA las migraciones; el EQUIPO revisa el SQL y las APLICA.
+  # (ver skill migraciones-postgresql). Requiere `task up` (base en marcha).
+  db-revision:
+    desc: 'Genera una migración (autogenerate). Uso: task db-revision -- "mensaje"'
+    dir: apps/api
+    cmds:
+      - uv run alembic revision --autogenerate -m "{{.CLI_ARGS}}"
+
+  db-upgrade:
+    desc: "Aplica las migraciones pendientes (alembic upgrade head). LA EJECUTA EL EQUIPO."
+    dir: apps/api
+    cmds:
+      - uv run alembic upgrade head
 
   # ───────────────────────── Extra ─────────────────────────
   build-web:
