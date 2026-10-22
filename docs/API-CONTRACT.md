@@ -54,7 +54,34 @@ ahora ningún endpoint resuelve permisos de workspace/proyecto.
 
 ---
 
+## Workspaces — `/api/v1/workspaces` (F0-T4b-1)
+
+Alcance por ruta: el `workspace_id` viaja en la URL. Autorización: **404** a no-miembros (no
+filtra existencia); **403** a miembro cuyo rol no permite la acción (ver ADR-0008). Matriz de
+permisos en `docs/modulos/autorizacion.md`.
+
+### POST `/api/v1/workspaces`
+- **Permiso:** autenticado (cualquier usuario con sesión).
+- **Cuerpo:** `{ "name": "<1..200>" }`
+- **201** → `WorkspaceRead` `{ workspace_id, name, created_at }`. El creador queda **owner**
+  (membresía creada en la misma transacción).
+- **Errores:** `401` sin sesión; `422` validación.
+
+### GET `/api/v1/workspaces`
+- **Permiso:** autenticado. Devuelve **solo** los workspaces donde el usuario tiene membresía
+  (aislamiento: no incluye ajenos).
+- **200** → `[WorkspaceRead]`. **401** sin sesión.
+
+### GET `/api/v1/workspaces/{workspace_id}`
+- **Permiso:** miembro del workspace con `workspaces:read` (owner/admin/member; **no** guest).
+- **200** → `WorkspaceRead`.
+- **Errores:** `401` sin sesión; `404` si no eres miembro o el workspace no existe (mismo
+  cuerpo, sin filtrar existencia); `403` si eres miembro pero tu rol no puede leer (p. ej. guest).
+
+---
+
 ## Pendiente (próximas tandas)
 
-- **F0-T4b:** `requiere_permiso`, workspace activo y rol efectivo; endpoints de
-  `workspaces` / `projects` / `memberships` con su RBAC y aislamiento.
+- **F0-T4b-2:** endpoints de `projects` / `memberships` (añadir/quitar/cambiar rol) con RBAC y
+  aislamiento; invariantes protectores (al menos un owner, transferencia atómica, guest=viewer).
+- **F0-T5:** token anti-CSRF.

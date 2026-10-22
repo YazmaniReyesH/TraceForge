@@ -12,6 +12,8 @@ from app.auth.errors import EmailAlreadyRegisteredError, InvalidCredentialsError
 from app.auth.port import AuthProvider
 from app.auth.tokens import create_access_token
 from app.core.config import Settings
+from app.core.constraints import USERS_EMAIL_UNIQUE
+from app.core.integrity import translate_integrity_error
 from app.models import User
 
 
@@ -40,9 +42,15 @@ class AuthService:
             await self._session.rollback()
             raise
         except IntegrityError as exc:
-            # Carrera: otro registro ganó el UNIQUE entre el chequeo y el commit.
+            # Mapeo por constraint (no catch-all): la carrera del UNIQUE de email se
+            # traduce a EmailAlreadyRegisteredError; cualquier otra constraint se re-lanza.
             await self._session.rollback()
-            raise EmailAlreadyRegisteredError from exc
+            mapped = translate_integrity_error(
+                exc, {USERS_EMAIL_UNIQUE: EmailAlreadyRegisteredError}
+            )
+            if mapped is exc:
+                raise
+            raise mapped from exc
         return user
 
     async def login(self, *, email: str, password: str) -> tuple[User, str]:

@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.auth.router import router as auth_router
 from app.core.config import Settings, get_settings
 from app.core.db import database_ready, get_engine
+from app.workspaces.router import router as workspaces_router
 
 
 class HealthResponse(TypedDict):
@@ -70,6 +71,7 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=503, content={"status": "not ready"})
 
     app.include_router(auth_router)
+    app.include_router(workspaces_router)
 
     return app
 
