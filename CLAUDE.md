@@ -44,7 +44,8 @@ TraceForge/
         main.py              # app FastAPI + GET /health (liveness) + /health/ready
         core/config.py       # Settings (pydantic-settings, prefijo TF_; DB/Redis/S3)
         core/db.py           # engine async + sessionmaker + Base + get_session
-      migrations/            # Alembic (async); versions/ vacío hasta F0-T3
+        models/              # modelos SQLAlchemy: user, workspace, project, membership, enums
+      migrations/            # Alembic (async); versions/ con la 1ª migración (F0-T3b)
       tests/
       alembic.ini
       pyproject.toml         # deps + ruff + mypy + pytest
@@ -155,12 +156,17 @@ y las fichas de `docs/modulos/<modulo>.md` (desde `_plantilla.md`).
 
 ## Estado actual
 
-**F0-T2 (infra de datos):** `compose.yaml` con PostgreSQL 16+pgvector y Redis
-(puertos en 127.0.0.1, healthchecks, volúmenes); backend conectado a Postgres (async
-asyncpg) con `GET /health/ready`; Alembic async configurado (sin migraciones aún);
-CI con service container de Postgres. **Sin** modelos de datos ni migraciones,
-autenticación/RBAC, uso real de Redis, contenerización de api/web, IA ni theming
-(tandas posteriores).
+**F0-T3b (modelo base de datos):** modelos SQLAlchemy de las 5 entidades base (users,
+workspaces, projects, workspace_memberships, project_memberships) en `app/models/`, con
+aislamiento por workspace e invariantes de esquema (owner único vía índice parcial, CHECK
+de roles, unicidad de membresías); **primera migración** Alembic generada (pendiente de
+aplicar por el equipo con `task db-upgrade`); pruebas de invariantes de BD; CI aplica la
+migración antes de las pruebas. Ver `docs/modulos/modelo-base.md` y ADR-0002/0006. **Sin**
+schemas/repository/service/endpoints, autenticación/RBAC efectivo, uso de `ai_policy`/
+`classification`, IA ni theming (F0-T4+).
+
+Hecho en F0-T2: `compose.yaml` (Postgres 16+pgvector, Redis), backend async a Postgres,
+`GET /health/ready`, Alembic async, CI con service container.
 
 > **Deuda conocida — MinIO/almacenamiento diferido:** en 2025 MinIO retiró sus
 > imágenes community de Docker Hub y su registro (quay.io) exige autenticación, por lo
