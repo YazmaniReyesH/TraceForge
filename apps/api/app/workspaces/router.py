@@ -1,6 +1,7 @@
-"""Router de workspaces (delgado). Endpoints mínimos que ejercitan la autorización."""
+"""Router de workspaces y de membresías de workspace (delgado)."""
 
 from collections.abc import Sequence
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -8,13 +9,30 @@ from app.auth.dependencies import get_current_user
 from app.core.security import Permission, WorkspaceContext, requiere_permiso
 from app.models import User, Workspace
 from app.workspaces.dependencies import get_workspace_service
-from app.workspaces.schemas import WorkspaceCreate, WorkspaceRead
+from app.workspaces.errors import (
+    AlreadyOwnerError,
+    CannotAssignOwnerRoleError,
+    CannotModifySoleOwnerError,
+    MemberExistsError,
+    NotWorkspaceMemberError,
+    UserNotFoundError,
+)
+from app.workspaces.schemas import (
+    TransferOwnershipRequest,
+    WorkspaceCreate,
+    WorkspaceMemberAdd,
+    WorkspaceMemberRead,
+    WorkspaceMemberRoleUpdate,
+    WorkspaceRead,
+)
 from app.workspaces.service import WorkspaceService
 
 router = APIRouter(prefix="/api/v1/workspaces", tags=["workspaces"])
 
-# Dependencia de permiso como singleton de módulo (evita llamar al factory en el default).
+# Dependencias de permiso como singletons de módulo (evita llamar al factory en el default).
 _requiere_lectura = requiere_permiso(Permission.WORKSPACES_READ)
+_gestiona_miembros = requiere_permiso(Permission.WORKSPACES_MANAGE_MEMBERS)
+_transfiere = requiere_permiso(Permission.WORKSPACES_TRANSFER_OWNERSHIP)
 
 
 @router.post("", response_model=WorkspaceRead, status_code=status.HTTP_201_CREATED)
@@ -46,3 +64,129 @@ async def get_workspace(
     if workspace is None:  # defensivo: la membresía implica que existe
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace no encontrado")
     return workspace
+
+
+# ── Membresías de workspace ──
+
+
+@router.get("/{workspace_id}/members", response_model=list[WorkspaceMemberRead])
+async def list_members(
+    context: WorkspaceContext = Depends(_requiere_lectura),
+    service: WorkspaceService = Depends(get_workspace_service),
+) -> list[WorkspaceMemberRead]:
+    rows = await service.list_members(context.workspace_id)
+    return [
+        WorkspaceMemberRead(
+            user_id=user.user_id,
+            email=user.email,
+            display_name=user.display_name,
+            role=membership.role,
+        )
+        for user, membership in rows
+    ]
+
+
+@router.post(
+    "/{workspace_id}/members",
+    response_model=WorkspaceMemberRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_member(
+    data: WorkspaceMemberAdd,
+    context: WorkspaceContext = Depends(_gestiona_miembros),
+    service: WorkspaceService = Depends(get_workspace_service),
+) -> WorkspaceMemberRead:
+    try:
+        user, membership = await service.add_member(
+            workspace_id=context.workspace_id, email=data.email, role=data.role
+        )
+    except UserNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado") from exc
+    except CannotAssignOwnerRoleError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "El rol owner se asigna transfiriendo la propiedad, no al añadir",
+        ) from exc
+    except MemberExistsError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "El usuario ya es miembro") from exc
+    return WorkspaceMemberRead(
+        user_id=user.user_id,
+        email=user.email,
+        display_name=user.display_name,
+        role=membership.role,
+    )
+
+
+@router.patch("/{workspace_id}/members/{user_id}", response_model=WorkspaceMemberRead)
+async def change_member_role(
+    user_id: UUID,
+    data: WorkspaceMemberRoleUpdate,
+    context: WorkspaceContext = Depends(_gestiona_miembros),
+    service: WorkspaceService = Depends(get_workspace_service),
+) -> WorkspaceMemberRead:
+    try:
+        await service.change_member_role(
+            workspace_id=context.workspace_id, user_id=user_id, role=data.role
+        )
+    except CannotAssignOwnerRoleError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "El rol owner se asigna transfiriendo la propiedad",
+        ) from exc
+    except CannotModifySoleOwnerError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "No puedes degradar al único owner; transfiere la propiedad",
+        ) from exc
+    except NotWorkspaceMemberError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Miembro no encontrado") from exc
+    rows = await service.list_members(context.workspace_id)
+    for user, membership in rows:
+        if membership.user_id == user_id:
+            return WorkspaceMemberRead(
+                user_id=user.user_id,
+                email=user.email,
+                display_name=user.display_name,
+                role=membership.role,
+            )
+    raise HTTPException(status.HTTP_404_NOT_FOUND, "Miembro no encontrado")
+
+
+@router.delete("/{workspace_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_member(
+    user_id: UUID,
+    context: WorkspaceContext = Depends(_gestiona_miembros),
+    service: WorkspaceService = Depends(get_workspace_service),
+) -> None:
+    try:
+        await service.remove_member(workspace_id=context.workspace_id, user_id=user_id)
+    except CannotModifySoleOwnerError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "No puedes quitar al único owner; transfiere la propiedad",
+        ) from exc
+    except NotWorkspaceMemberError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Miembro no encontrado") from exc
+
+
+@router.post("/{workspace_id}/transfer-ownership", status_code=status.HTTP_204_NO_CONTENT)
+async def transfer_ownership(
+    data: TransferOwnershipRequest,
+    context: WorkspaceContext = Depends(_transfiere),
+    service: WorkspaceService = Depends(get_workspace_service),
+) -> None:
+    """Transfiere la propiedad a otro miembro (atómico). Solo el owner actual puede."""
+    try:
+        await service.transfer_ownership(
+            workspace_id=context.workspace_id,
+            current_owner_id=context.user.user_id,
+            new_owner_id=data.new_owner_user_id,
+        )
+    except AlreadyOwnerError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Ese usuario ya es el owner") from exc
+    except NotWorkspaceMemberError as exc:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "El nuevo owner no es miembro del workspace"
+        ) from exc
+    except CannotModifySoleOwnerError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "No se pudo transferir la propiedad") from exc

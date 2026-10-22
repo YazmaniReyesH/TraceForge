@@ -50,7 +50,9 @@ TraceForge/
         core/constraints.py  # nombres de constraints centralizados
         models/              # SQLAlchemy: user, workspace, project, membership, credential, enums, types
         auth/                # autenticación (F0-T4a): port AuthProvider + local, hashing, tokens, service, router
-        workspaces/          # endpoints mínimos de workspaces (F0-T4b-1): repo, service, router, schemas
+        workspaces/          # workspaces + membresías e invariantes de owner (F0-T4b): repo, service, router, schemas
+        projects/            # CRUD de projects + membresías de proyecto (F0-T4b-2)
+        users/               # borrado seguro de usuario (invariante; sin endpoint de baja)
       migrations/            # Alembic (async); versions/ con migraciones F0-T3b y F0-T4a
       tests/
       alembic.ini
@@ -127,7 +129,7 @@ está en [`docs/API-CONTRACT.md`](./docs/API-CONTRACT.md).
 Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesita):
 `ai-tasks.md`, `plantillas.md`, `glosario.md` y las fichas de
 `docs/modulos/<modulo>.md` (desde `_plantilla.md`). Ya existen: `seguridad-datos.md`,
-`modulos/modelo-base.md`, `modulos/auth.md`, `modulos/autorizacion.md`.
+`modulos/modelo-base.md`, `modulos/auth.md`, `modulos/autorizacion.md`, `modulos/projects.md`.
 
 ## Convención de trabajo (obligatoria)
 
@@ -166,15 +168,18 @@ Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesi
 
 ## Estado actual
 
-**F0-T4b-1 (núcleo de autorización):** contexto de autorización por ruta
-(`get_workspace_context`: 404 genérico a no-miembros), **rol efectivo** puro (piso de
-owner/admin), **matriz de permisos** central y dependencia **`requiere_permiso`** (403); patrón
-**`WorkspaceScopedRepository`** (filtro por workspace); **mapeo de `IntegrityError` por
-constraint** (fin del catch-all); endpoints mínimos `POST/GET /api/v1/workspaces` y
-`GET /api/v1/workspaces/{id}` (crear ⇒ owner; aislamiento). **Sin migración.** Ver
-`docs/modulos/autorizacion.md`, `docs/API-CONTRACT.md` y ADR-0008. **Sin** CRUD de projects,
-gestión de membresías, invariantes protectores (al menos un owner, transferencia atómica,
-guest=viewer como regla dura) ni CSRF (F0-T4b-2 / F0-T5).
+**Fase 0 COMPLETA. F0-T4b-2 (CRUD de projects + membresías + invariantes):** CRUD de projects
+con aislamiento y RBAC (gate de proyecto con rol efectivo; 404/403); **membresías de workspace y
+de proyecto** (listar/añadir/cambiar rol/quitar); **invariantes de servicio** probados: al menos
+un owner, **transferencia atómica** de propiedad, **guest=viewer** como regla dura, rol efectivo
+en el gate de proyecto, **borrado seguro de usuario** (`app/users/`, sin endpoint de baja).
+Reutiliza el mapeo de `IntegrityError` por constraint. **Sin migración.** Ver
+`docs/modulos/projects.md`, `docs/modulos/autorizacion.md`, `docs/API-CONTRACT.md`, ADR-0002/0008.
+**Pendiente (post-Fase 0):** CSRF (F0-T5), invitación por email, flujo de baja de cuenta, IA.
+
+Hecho en F0-T4b-1: núcleo de autorización (contexto por ruta, rol efectivo, matriz,
+`requiere_permiso`, `WorkspaceScopedRepository`, mapeo de `IntegrityError`) y endpoints mínimos
+de workspaces (ADR-0008).
 
 Hecho en F0-T4a: autenticación local (argon2id + JWT en cookie httpOnly) tras `AuthProvider`,
 tabla `user_credentials`, endpoints `/auth/*`, `get_current_user` (ADR-0007).

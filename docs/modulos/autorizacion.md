@@ -60,27 +60,50 @@ singleton de módulo (`_requiere_lectura = requiere_permiso(Permission.WORKSPACE
 workspace (projects, evidencia, … en F0-T4b-2+) heredan de aquí para que el aislamiento sea el
 patrón por defecto. El `workspace_id` proviene del `WorkspaceContext`, nunca del cliente.
 
+## Gate y matriz de PROYECTO (F0-T4b-2)
+
+- `get_project_context` combina el rol de workspace + el rol de proyecto con
+  `effective_project_role`. **404** si el proyecto no existe, no pertenece al workspace o el
+  usuario no tiene acceso efectivo (member/guest sin membresía); **403** (vía
+  `requiere_permiso_proyecto`) si tiene acceso pero su rol efectivo no permite la acción.
+- `PROJECT_PERMISSION_MATRIX` (rol de proyecto → acciones):
+
+| Acción | lead | contributor | viewer |
+|---|:---:|:---:|:---:|
+| `projects:read` | ✓ | ✓ | ✓ |
+| `projects:update` | ✓ | ✓ | — |
+| `projects:delete` | ✓ | — | — |
+| `projects:manage_members` | ✓ | — | — |
+
+`projects:create` es acción de **workspace** (owner/admin). owner/admin tienen piso efectivo =
+`lead` en cualquier proyecto.
+
 ## Manejo de `IntegrityError` por constraint
 
 `app/core/integrity.py` (`constraint_name`, `translate_integrity_error`) + nombres en
-`app/core/constraints.py`. Mapea constraint → error de dominio; desconocida → re-lanza. Aplicado
-al registro (`users_email_key` → `EmailAlreadyRegisteredError`). F0-T4b-2 añadirá los mapeos de
-membresía/owner/CHECK.
+`app/core/constraints.py`. Mapea constraint → error de dominio; desconocida → re-lanza. Usado en
+registro (`users_email_key`), alta de miembro de workspace (`uq_workspace_memberships_user_workspace`)
+y de proyecto (`uq_project_memberships_user_project`).
 
-## Endpoints (ver `docs/API-CONTRACT.md`)
+## Endpoints
 
-- `POST /api/v1/workspaces` — crear (auth); el creador queda **owner** (misma transacción).
-- `GET /api/v1/workspaces` — listar los del usuario (aislamiento).
-- `GET /api/v1/workspaces/{workspace_id}` — detalle (`requiere_permiso(workspaces:read)`).
+Ver `docs/API-CONTRACT.md`: workspaces (+ `/members`, `/transfer-ownership`) y projects
+(+ `/{project_id}/members`). Ficha de projects: `docs/modulos/projects.md`.
 
-## Invariantes de SERVICIO pendientes (F0-T4b-2)
+## Invariantes de SERVICIO (F0-T4b-2, implementados y probados)
 
-- **Al menos un owner** por workspace; **transferencia atómica** de propiedad.
-- **`guest` = solo `viewer`** como **regla dura** en el servicio (rechazar guest+contributor/lead).
-- **Borrado seguro de usuario** (limpiar membresías ante el `ON DELETE RESTRICT`).
-- CRUD de projects y **gestión de membresías** (añadir/quitar/cambiar rol) con su RBAC.
-- Rol efectivo a **nivel proyecto** usando `effective_project_role`.
+- **Al menos un owner**: no se puede degradar ni quitar al único owner (`CannotModifySoleOwnerError`).
+- **Transferencia atómica**: nuevo→owner / anterior→admin en una tx (degrada, `flush`, promueve;
+  respeta el índice único parcial de owner).
+- **`owner` no se asigna directamente** (add/change): `CannotAssignOwnerRoleError`.
+- **`guest` = solo `viewer`** como regla dura en el servicio de membresías de proyecto
+  (`GuestMustBeViewerError`).
+- **Rol efectivo** aplicado en el gate de proyecto.
+- **Borrado seguro de usuario** (`app/users/`): un user con membresías no se borra
+  (`UserHasMembershipsError`); respeta el `ON DELETE RESTRICT`. **No hay endpoint de baja aún.**
 
 ## Pendiente / `[[POR LLENAR]]`
 
 - **CSRF** (token double-submit o `SameSite=Strict`) — **F0-T5** (ADR-0008).
+- **Invitación por email** de usuarios nuevos (hoy solo se añaden usuarios existentes).
+- **Flujo completo de baja de cuenta** (endpoint + revocar membresías / transferir titularidades).
