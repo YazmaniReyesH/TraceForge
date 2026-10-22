@@ -44,8 +44,9 @@ TraceForge/
         main.py              # app FastAPI + GET /health (liveness) + /health/ready
         core/config.py       # Settings (pydantic-settings, prefijo TF_; DB/Redis/S3)
         core/db.py           # engine async + sessionmaker + Base + get_session
-        models/              # modelos SQLAlchemy: user, workspace, project, membership, enums
-      migrations/            # Alembic (async); versions/ con la 1ª migración (F0-T3b)
+        models/              # SQLAlchemy: user, workspace, project, membership, credential, enums, types
+        auth/                # autenticación (F0-T4a): port AuthProvider + local, hashing, tokens, service, router
+      migrations/            # Alembic (async); versions/ con migraciones F0-T3b y F0-T4a
       tests/
       alembic.ini
       pyproject.toml         # deps + ruff + mypy + pytest
@@ -115,9 +116,13 @@ La documentación vive en `docs/` y se actualiza en el **mismo PR** que el códi
 El **flujo de trabajo Git/PR** del proyecto (rama por tanda, commits, PR, merge) está
 en [`docs/GITHUB_WORKFLOW.md`](./docs/GITHUB_WORKFLOW.md).
 
+El **contrato de negocio de la API** (permisos, reglas, ejemplos, errores por endpoint)
+está en [`docs/API-CONTRACT.md`](./docs/API-CONTRACT.md).
+
 Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesita):
-`API-CONTRACT.md`, `ai-tasks.md`, `plantillas.md`, `seguridad-datos.md`, `glosario.md`
-y las fichas de `docs/modulos/<modulo>.md` (desde `_plantilla.md`).
+`ai-tasks.md`, `plantillas.md`, `glosario.md` y las fichas de
+`docs/modulos/<modulo>.md` (desde `_plantilla.md`). Ya existen: `seguridad-datos.md`,
+`modulos/modelo-base.md`, `modulos/auth.md`.
 
 ## Convención de trabajo (obligatoria)
 
@@ -156,14 +161,18 @@ y las fichas de `docs/modulos/<modulo>.md` (desde `_plantilla.md`).
 
 ## Estado actual
 
-**F0-T3b (modelo base de datos):** modelos SQLAlchemy de las 5 entidades base (users,
-workspaces, projects, workspace_memberships, project_memberships) en `app/models/`, con
-aislamiento por workspace e invariantes de esquema (owner único vía índice parcial, CHECK
-de roles, unicidad de membresías); **primera migración** Alembic generada (pendiente de
-aplicar por el equipo con `task db-upgrade`); pruebas de invariantes de BD; CI aplica la
-migración antes de las pruebas. Ver `docs/modulos/modelo-base.md` y ADR-0002/0006. **Sin**
-schemas/repository/service/endpoints, autenticación/RBAC efectivo, uso de `ai_policy`/
-`classification`, IA ni theming (F0-T4+).
+**F0-T4a (autenticación e identidad):** autenticación local (email + contraseña, **argon2id**
++ **JWT HS256** en **cookie httpOnly**) detrás del puerto `AuthProvider` (SSO futuro sin
+reescribir); tabla **`user_credentials`** (aparte de `users`) con su **migración incremental**
+(pendiente de aplicar por el equipo con `task db-upgrade`); endpoints
+`POST /api/v1/auth/{register,login,logout}` y `GET /api/v1/auth/me`; dependencia
+`get_current_user` (401 sin token válido); normalización de email y `role` tipado como StrEnum
+(sin migración). Ver `docs/modulos/auth.md`, `docs/API-CONTRACT.md` y ADR-0007. **Sin** RBAC
+fino / `requiere_permiso`, workspace activo, invariantes de servicio de membresías ni endpoints
+de workspaces/projects/memberships (F0-T4b).
+
+Hecho en F0-T3b: modelo base (users, workspaces, projects, membresías) con aislamiento e
+invariantes de esquema y su 1ª migración (ADR-0002/0006).
 
 Hecho en F0-T2: `compose.yaml` (Postgres 16+pgvector, Redis), backend async a Postgres,
 `GET /health/ready`, Alembic async, CI con service container.

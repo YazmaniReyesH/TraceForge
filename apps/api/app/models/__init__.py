@@ -6,6 +6,7 @@ Importar este paquete (``import app.models``) registra TODAS las tablas en
 """
 
 from app.core.db import Base
+from app.models.credential import UserCredential
 from app.models.enums import ProjectRole, WorkspaceRole
 from app.models.membership import ProjectMembership, WorkspaceMembership
 from app.models.project import Project
@@ -18,6 +19,7 @@ __all__ = [
     "ProjectMembership",
     "ProjectRole",
     "User",
+    "UserCredential",
     "Workspace",
     "WorkspaceMembership",
     "WorkspaceRole",

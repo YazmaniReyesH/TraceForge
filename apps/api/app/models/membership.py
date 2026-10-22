@@ -18,7 +18,6 @@ from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
     Index,
-    String,
     UniqueConstraint,
     Uuid,
     text,
@@ -28,6 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 from app.models.enums import ProjectRole, WorkspaceRole, sql_in_clause
 from app.models.mixins import CreatedAtMixin
+from app.models.types import StrEnumType
 
 
 class WorkspaceMembership(CreatedAtMixin, Base):
@@ -49,7 +49,9 @@ class WorkspaceMembership(CreatedAtMixin, Base):
         nullable=False,
         index=True,
     )
-    role: Mapped[WorkspaceRole] = mapped_column(String(20), nullable=False)
+    role: Mapped[WorkspaceRole] = mapped_column(
+        StrEnumType(WorkspaceRole, length=20), nullable=False
+    )
 
     __table_args__ = (
         # Una membresía por (user, workspace). Indexa user_id como columna líder.
@@ -88,7 +90,7 @@ class ProjectMembership(CreatedAtMixin, Base):
         nullable=False,
         index=True,
     )
-    role: Mapped[ProjectRole] = mapped_column(String(20), nullable=False)
+    role: Mapped[ProjectRole] = mapped_column(StrEnumType(ProjectRole, length=20), nullable=False)
 
     __table_args__ = (
         # Una membresía por (user, project). Indexa user_id como columna líder.

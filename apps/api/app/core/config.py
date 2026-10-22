@@ -47,6 +47,23 @@ class Settings(BaseSettings):
     s3_secret_key: str = "tf_minio_dev_password"
     s3_bucket: str = "traceforge"
 
+    # ── Autenticación (F0-T4a) ──
+    # JWT (HS256). El secreto de DEV es inseguro a propósito: en staging/producción
+    # DEBE sobreescribirse con TF_JWT_SECRET. La caducidad del token es configurable.
+    jwt_secret: str = "dev-insecure-change-me-set-TF_JWT_SECRET-in-prod"
+    jwt_algorithm: str = "HS256"
+    jwt_expires_minutes: int = 60
+
+    # Cookie de sesión (httpOnly). `secure=True` en prod (requiere HTTPS).
+    auth_cookie_name: str = "tf_session"
+    auth_cookie_secure: bool = False
+    auth_cookie_samesite: str = "lax"
+
+    # Argon2id: factor de costo configurable (ver app/auth/hashing.py).
+    argon2_time_cost: int = 3
+    argon2_memory_cost: int = 65536  # KiB (64 MiB)
+    argon2_parallelism: int = 4
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_cors_origins(cls, value: object) -> object:
