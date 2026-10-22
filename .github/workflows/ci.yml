@@ -54,6 +54,11 @@ jobs:
       - name: Instalar dependencias del backend
         run: task setup-api
 
+      - name: Aplicar migraciones (alembic upgrade head)
+        # El esquema debe existir para que las pruebas de invariantes de BD corran de
+        # verdad contra el service container. En dev, el equipo lo aplica con task db-upgrade.
+        run: task db-upgrade
+
       - name: Lint (ruff)
         run: task lint-api
 

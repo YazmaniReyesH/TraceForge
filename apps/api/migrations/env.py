@@ -12,12 +12,9 @@ from alembic import context
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import app.models  # noqa: F401  (registra TODAS las tablas en Base.metadata)
 from app.core.config import get_settings
 from app.core.db import Base
-
-# Importante para el autogenerate: al agregar modelos, importarlos aquí para que
-# queden registrados en Base.metadata. Ejemplo (F0-T3):
-#   from app.modules.users import models as _users_models
 
 config = context.config
 
