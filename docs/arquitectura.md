@@ -27,6 +27,14 @@ documento da el panorama y enlaza a cada uno, sin duplicar su contenido.
 | ADR | Título | Estado |
 |---|---|---|
 | [0001](./adr/0001-base-de-datos-postgresql-y-driver-async.md) | Base de datos PostgreSQL (con pgvector) y driver async asyncpg | aceptado |
+| [0002](./adr/0002-modelo-multiusuario-y-rbac.md) | Modelo multiusuario (multi-tenant) y control de acceso (RBAC) | aceptado |
+| [0003](./adr/0003-procedencia-del-contenido-generado-por-ia.md) | Procedencia del contenido generado por IA | aceptado |
+| [0004](./adr/0004-ia-propone-codigo-valida.md) | La IA propone, el código determinista valida | aceptado |
+| [0005](./adr/0005-politica-de-datos-y-redaccion.md) | Política de datos y redacción de secretos | aceptado |
 
-> Próximos ADRs previstos (F0-T3+): ADRs fundacionales del modelo base
-> (users, workspaces, projects, memberships), RBAC, y gateway/política de IA.
+Documentos relacionados: [`seguridad-datos.md`](./seguridad-datos.md) (resumen operativo de
+seguridad/redacción; lo gobierna el ADR-0005).
+
+> Próximos ADRs previstos: capa de "organización" por encima del workspace (si se decide),
+> catálogos (CWE/ATT&CK/CVE) y gateway `AIProvider`. **F0-T3b** materializa el modelo base
+> (users, workspaces, projects, membresías) y su primera migración a partir del ADR-0002.
