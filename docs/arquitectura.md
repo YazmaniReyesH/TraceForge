@@ -36,6 +36,7 @@ documento da el panorama y enlaza a cada uno, sin duplicar su contenido.
 | [0005](./adr/0005-politica-de-datos-y-redaccion.md) | Política de datos y redacción de secretos | aceptado |
 | [0006](./adr/0006-on-delete-y-unicidad-de-owner.md) | Política de borrado (ON DELETE) y unicidad de owner en el modelo base | aceptado |
 | [0007](./adr/0007-autenticacion-local-hashing-y-transporte-de-token.md) | Autenticación local: ubicación de credenciales, hashing y transporte de token | aceptado |
+| [0008](./adr/0008-nucleo-de-autorizacion.md) | Núcleo de autorización: alcance por ruta, rol efectivo y matriz de permisos | aceptado |
 
 Documentos relacionados: [`seguridad-datos.md`](./seguridad-datos.md) (resumen operativo de
 seguridad/redacción; lo gobierna el ADR-0005) y la ficha

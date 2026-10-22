@@ -41,11 +41,16 @@ TraceForge/
   apps/
     api/        # Backend FastAPI (uv)
       app/
-        main.py              # app FastAPI + GET /health (liveness) + /health/ready
-        core/config.py       # Settings (pydantic-settings, prefijo TF_; DB/Redis/S3)
+        main.py              # app FastAPI + /health + routers (auth, workspaces)
+        core/config.py       # Settings (pydantic-settings, prefijo TF_; DB/Redis/S3/auth)
         core/db.py           # engine async + sessionmaker + Base + get_session
+        core/security.py     # autorización (F0-T4b-1): matriz, rol efectivo, contexto, requiere_permiso
+        core/repository.py   # WorkspaceScopedRepository (filtro por workspace)
+        core/integrity.py    # mapeo IntegrityError -> error de dominio (por constraint)
+        core/constraints.py  # nombres de constraints centralizados
         models/              # SQLAlchemy: user, workspace, project, membership, credential, enums, types
         auth/                # autenticación (F0-T4a): port AuthProvider + local, hashing, tokens, service, router
+        workspaces/          # endpoints mínimos de workspaces (F0-T4b-1): repo, service, router, schemas
       migrations/            # Alembic (async); versions/ con migraciones F0-T3b y F0-T4a
       tests/
       alembic.ini
@@ -122,7 +127,7 @@ está en [`docs/API-CONTRACT.md`](./docs/API-CONTRACT.md).
 Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesita):
 `ai-tasks.md`, `plantillas.md`, `glosario.md` y las fichas de
 `docs/modulos/<modulo>.md` (desde `_plantilla.md`). Ya existen: `seguridad-datos.md`,
-`modulos/modelo-base.md`, `modulos/auth.md`.
+`modulos/modelo-base.md`, `modulos/auth.md`, `modulos/autorizacion.md`.
 
 ## Convención de trabajo (obligatoria)
 
@@ -161,15 +166,18 @@ Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesi
 
 ## Estado actual
 
-**F0-T4a (autenticación e identidad):** autenticación local (email + contraseña, **argon2id**
-+ **JWT HS256** en **cookie httpOnly**) detrás del puerto `AuthProvider` (SSO futuro sin
-reescribir); tabla **`user_credentials`** (aparte de `users`) con su **migración incremental**
-(pendiente de aplicar por el equipo con `task db-upgrade`); endpoints
-`POST /api/v1/auth/{register,login,logout}` y `GET /api/v1/auth/me`; dependencia
-`get_current_user` (401 sin token válido); normalización de email y `role` tipado como StrEnum
-(sin migración). Ver `docs/modulos/auth.md`, `docs/API-CONTRACT.md` y ADR-0007. **Sin** RBAC
-fino / `requiere_permiso`, workspace activo, invariantes de servicio de membresías ni endpoints
-de workspaces/projects/memberships (F0-T4b).
+**F0-T4b-1 (núcleo de autorización):** contexto de autorización por ruta
+(`get_workspace_context`: 404 genérico a no-miembros), **rol efectivo** puro (piso de
+owner/admin), **matriz de permisos** central y dependencia **`requiere_permiso`** (403); patrón
+**`WorkspaceScopedRepository`** (filtro por workspace); **mapeo de `IntegrityError` por
+constraint** (fin del catch-all); endpoints mínimos `POST/GET /api/v1/workspaces` y
+`GET /api/v1/workspaces/{id}` (crear ⇒ owner; aislamiento). **Sin migración.** Ver
+`docs/modulos/autorizacion.md`, `docs/API-CONTRACT.md` y ADR-0008. **Sin** CRUD de projects,
+gestión de membresías, invariantes protectores (al menos un owner, transferencia atómica,
+guest=viewer como regla dura) ni CSRF (F0-T4b-2 / F0-T5).
+
+Hecho en F0-T4a: autenticación local (argon2id + JWT en cookie httpOnly) tras `AuthProvider`,
+tabla `user_credentials`, endpoints `/auth/*`, `get_current_user` (ADR-0007).
 
 Hecho en F0-T3b: modelo base (users, workspaces, projects, membresías) con aislamiento e
 invariantes de esquema y su 1ª migración (ADR-0002/0006).
