@@ -74,11 +74,13 @@ trim) en el servicio antes de registrar/buscar.
   hasta expirar (no hay lista de revocación). Si se requiere revocación inmediata, habrá que
   añadir denylist/rotación. `[[POR LLENAR: revocación de tokens / refresh tokens si se necesita]]`.
 - **Registro y enumeración — DEUDA DE SEGURIDAD CONOCIDA:** `POST /auth/register` responde
-  **409** cuando el email ya existe. Aunque el mensaje es genérico, el **código de estado** (409
-  vs 201) permite **enumeración de usuarios** por registro: un atacante puede sondear qué emails
-  están dados de alta. Se asume a conciencia en F0-T4a (sin sistema de correo) y se **cerrará con
-  verificación por email** (responder siempre 200/202 "revisa tu correo" y notificar por email si
-  la cuenta ya existía, sin revelarlo en la respuesta HTTP).
+  **409** cuando el email ya existe. Tanto el **código de estado** (409 vs 201) como —desde
+  F0-T5a— el **`code` específico `email_already_registered`** del envelope (ADR-0009) permiten
+  **enumeración de usuarios** por registro: un atacante puede sondear qué emails están dados de
+  alta. Ambos (status y code) forman parte de esta deuda y se asumen a conciencia por ahora (sin
+  sistema de correo). Se **cerrará junto con la verificación por email**: el registro responderá
+  siempre 200/202 "revisa tu correo" (sin distinguir en status ni en code si la cuenta ya existía)
+  y, si existía, se notificará por email fuera de la respuesta HTTP.
   `[[POR LLENAR: flujo de verificación por email cuando exista envío de correo]]`.
 - Argon2 añade una dependencia nativa (argon2-cffi) y coste de CPU/memoria por login (deseado).
 

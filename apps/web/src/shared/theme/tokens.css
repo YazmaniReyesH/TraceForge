@@ -1,0 +1,140 @@
+/*
+ * TraceForge — tokens de diseño (FUENTE ÚNICA de verdad).
+ * Ningún componente usa colores/fuentes/espaciados/radios "a mano": todo sale de aquí.
+ * Claro por defecto en :root; oscuro en .theme-dark (clase aplicada al <html>).
+ * Al final, el "puente" mapea las variables de PrimeReact a estos tokens (sin paleta divergente).
+ */
+
+:root {
+  /* Superficies / texto / borde (CLARO) */
+  --surface-app: #f7f9fb;
+  --surface-card: #ffffff;
+  --surface-raised: #eef2f6;
+  --border: #e2e8f0;
+  --text-strong: #0f172a;
+  --text: #334155;
+  --text-muted: #64748b;
+
+  /* Acentos */
+  --accent: #0e9aa3;
+  --accent-contrast: #ffffff;
+  --focus-ring: #14c0c9;
+  --ai: #7c5cff;
+
+  /* Severidad */
+  --sev-critical: #c1123f;
+  --sev-high: #e5484d;
+  --sev-medium: #d9930b;
+  --sev-low: #1c7ed6;
+  --sev-info: #64748b;
+
+  /* Estados semánticos */
+  --success: #2f9e44;
+  --warning: #d9930b;
+  --danger: #e03131;
+  --info: var(--accent);
+
+  /* Tipografía */
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", monospace;
+
+  /* Espaciado */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  /* Radios */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* Sombras (sutiles) */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.theme-dark {
+  /* Superficies / texto / borde (OSCURO) */
+  --surface-app: #0a0e14;
+  --surface-card: #111826;
+  --surface-raised: #1a2233;
+  --border: #223049;
+  --text-strong: #e6edf3;
+  --text: #c2cedb;
+  --text-muted: #7e8ca0;
+
+  /* Acentos (oscuro) */
+  --accent: #22d3db;
+  --accent-contrast: #04121a;
+  --focus-ring: #2ce6ef;
+  --ai: #9d86ff;
+
+  /* Severidad (oscuro) */
+  --sev-critical: #ff4d6d;
+  --sev-high: #ff6b6b;
+  --sev-medium: #f5b13d;
+  --sev-low: #4dabff;
+  --sev-info: #8a98ac;
+
+  /* Estados (oscuro) */
+  --success: #51cf66;
+  --warning: #f5b13d;
+  --danger: #ff6b6b;
+
+  /* En oscuro, borde luminoso tenue en vez de sombra marcada */
+  --shadow-sm: 0 0 0 1px rgba(44, 230, 239, 0.04);
+  --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+/* Reset mínimo + base de la app (ambos temas) */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--surface-app);
+  color: var(--text);
+  font-family: var(--font-ui);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+kbd,
+pre,
+.tf-mono {
+  font-family: var(--font-mono);
+}
+
+/*
+ * Puente a PrimeReact: sus componentes leen estas variables. Las mapeamos a NUESTROS tokens
+ * con !important para que gane nuestra paleta sobre el preset Lara, en ambos temas (el acento
+ * teal y las superficies son siempre los nuestros; sin paleta divergente).
+ */
+:root,
+.theme-dark {
+  --primary-color: var(--accent) !important;
+  --primary-color-text: var(--accent-contrast) !important;
+  --surface-ground: var(--surface-app) !important;
+  --surface-section: var(--surface-app) !important;
+  --surface-card: var(--surface-card) !important;
+  --surface-overlay: var(--surface-card) !important;
+  --surface-border: var(--border) !important;
+  --surface-hover: var(--surface-raised) !important;
+  --text-color: var(--text) !important;
+  --text-color-secondary: var(--text-muted) !important;
+  --focus-ring: 0 0 0 2px var(--focus-ring) !important;
+  --border-radius: var(--radius-md) !important;
+  --font-family: var(--font-ui) !important;
+}

@@ -103,6 +103,14 @@ tasks:
     cmds:
       - npm run typecheck
 
+  # ───────────────────────── Tipos desde OpenAPI ─────────────────────────
+  gen-types:
+    desc: "Genera los tipos TS del frontend desde el OpenAPI del backend (commitea el resultado)"
+    cmds:
+      # Vuelca el OpenAPI del backend (offline, sin servidor) y genera los tipos.
+      - cd apps/api && uv run python -c "import json; from app.main import app; open('openapi.json','w',encoding='utf-8').write(json.dumps(app.openapi()))"
+      - cd apps/web && npm run gen-types
+
   test:
     desc: "Pruebas de backend (pytest). Frontend pendiente hasta F0-T5."
     cmds:

@@ -1,13 +1,19 @@
-"""Errores de dominio de autenticación. El router los traduce a HTTP."""
+"""Errores de dominio de autenticación (envelope {code, message} vía DomainError)."""
+
+from app.core.errors import DomainError
 
 
-class AuthError(Exception):
+class AuthError(DomainError):
     """Base de los errores de autenticación."""
 
 
 class EmailAlreadyRegisteredError(AuthError):
-    """Ya existe un usuario con ese email (normalizado)."""
+    code = "email_already_registered"
+    status_code = 409
+    default_message = "Ese correo ya está registrado"
 
 
 class InvalidCredentialsError(AuthError):
-    """Email o contraseña inválidos. Mensaje genérico: no revela cuál falló."""
+    code = "invalid_credentials"
+    status_code = 401
+    default_message = "Credenciales inválidas"

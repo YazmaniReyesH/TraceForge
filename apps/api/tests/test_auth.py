@@ -123,8 +123,8 @@ def test_login_wrong_password_401_generic() -> None:
                         "/api/v1/auth/login", json={"email": email, "password": "not-the-password"}
                     )
                     assert resp.status_code == 401
-                    # Mensaje genérico: no revela si el email existe.
-                    assert resp.json()["detail"] == "Credenciales inválidas"
+                    # Envelope {code, message}; code estable (no revela si el email existe).
+                    assert resp.json()["code"] == "invalid_credentials"
             finally:
                 await _cleanup([email])
             return "ok"
@@ -146,7 +146,7 @@ def test_login_unknown_email_401_same_message() -> None:
                     json={"email": f"nope-{uuid4()}@example.com", "password": _PASSWORD},
                 )
                 assert resp.status_code == 401
-                assert resp.json()["detail"] == "Credenciales inválidas"
+                assert resp.json()["code"] == "invalid_credentials"
             return "ok"
         finally:
             await app_engine.dispose()
@@ -243,9 +243,16 @@ def test_logout_clears_cookie() -> None:
             try:
                 async with _client() as client:
                     await _register(client, email)
-                    await client.post(
+                    login = await client.post(
                         "/api/v1/auth/login", json={"email": email, "password": _PASSWORD}
                     )
+                    assert "tf_csrf" in login.cookies  # cookie CSRF legible emitida
+                    # Mutación SIN token CSRF -> 403 csrf_failed.
+                    no_csrf = await client.post("/api/v1/auth/logout")
+                    assert no_csrf.status_code == 403
+                    assert no_csrf.json()["code"] == "csrf_failed"
+                    # Mutación CON token correcto -> 204.
+                    client.headers["X-CSRF-Token"] = client.cookies.get("tf_csrf") or ""
                     logout = await client.post("/api/v1/auth/logout")
                     assert logout.status_code == 204
             finally:

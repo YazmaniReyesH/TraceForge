@@ -18,7 +18,7 @@ Repositorio: https://github.com/YazmaniReyesH/TraceForge.git
 |---|---|
 | Backend | Python **3.12** + FastAPI + Pydantic v2 + **SQLAlchemy 2 (async) + Alembic** |
 | Gestor backend | **uv** (gestiona también el Python 3.12) |
-| Frontend | React + TypeScript + **Vite** |
+| Frontend | React + TypeScript + **Vite** + **PrimeReact**; TanStack Query, react-router, i18next (es-MX), tipos desde OpenAPI |
 | Gestor frontend | **npm** |
 | Base de datos | **PostgreSQL 16 + pgvector**, acceso async con **asyncpg** (ver ADR-0001) |
 | Infra de dev | **Docker Compose** (`compose.yaml`): db + **Redis 7** (Redis disponible, aún sin uso en código). **MinIO/almacenamiento: diferido** — deuda conocida |
@@ -58,8 +58,13 @@ TraceForge/
       alembic.ini
       pyproject.toml         # deps + ruff + mypy + pytest
       .python-version        # 3.12
-    web/        # Frontend React + Vite + TS (npm)
-      src/      # main.tsx, App.tsx (consume /health), api.ts
+    web/        # Frontend React + Vite + TS (npm); Vite proxya /api -> backend en dev
+      src/
+        main.tsx · App.tsx     # providers (Theme/Query/Router/PrimeReact) + rutas
+        shared/theme/          # tokens.css (FUENTE ÚNICA), ThemeProvider, tema PrimeReact
+        shared/api/            # cliente HTTP (CSRF, 401, errores), types.gen.ts (OpenAPI)
+        shared/i18n/           # es-MX (sin textos hardcodeados) · shared/ui/ (layout, loader)
+        modules/auth/          # login/register/logout, guard, hooks · modules/home/ (placeholder)
   packages/
     shared/     # (placeholder) cliente TS generado desde OpenAPI — aún vacío
   docs/
@@ -97,6 +102,7 @@ Requiere además **Docker** (Desktop/Engine) para la infra.
 | `task build-web` | Build de producción del frontend (lo que valida CI) |
 | `task db-revision -- "msg"` | **Genera** una migración Alembic (la revisa/aplica el equipo) |
 | `task db-upgrade` | Aplica migraciones (`alembic upgrade head`) — **la ejecuta el equipo** |
+| `task gen-types` | Regenera los tipos TS del frontend desde el OpenAPI del backend (commitear) |
 | `task --list` | Ver todas las tareas |
 
 Primer arranque: `task setup`, copiar `apps/api/.env.example`→`.env` y
@@ -129,7 +135,8 @@ está en [`docs/API-CONTRACT.md`](./docs/API-CONTRACT.md).
 Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesita):
 `ai-tasks.md`, `plantillas.md`, `glosario.md` y las fichas de
 `docs/modulos/<modulo>.md` (desde `_plantilla.md`). Ya existen: `seguridad-datos.md`,
-`modulos/modelo-base.md`, `modulos/auth.md`, `modulos/autorizacion.md`, `modulos/projects.md`.
+`modulos/modelo-base.md`, `modulos/auth.md`, `modulos/autorizacion.md`, `modulos/projects.md`,
+`modulos/frontend.md`.
 
 ## Convención de trabajo (obligatoria)
 
@@ -152,6 +159,7 @@ Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesi
 |---|---|
 | **documentacion-proyecto** | SIEMPRE al cerrar una tarea y antes de un PR: mantiene viva la documentación de `docs/` (ADRs, API-CONTRACT, fichas de módulo, ai-tasks, plantillas, seguridad-datos, glosario). |
 | **backend-fastapi** | Al escribir/modificar backend: endpoints, servicios, repositorios, modelos, schemas, RBAC, aislamiento por workspace, auditoría y funciones de IA. Hace respetar las capas router→service→repository y los principios de IA. |
+| **frontend-react** | SIEMPRE al escribir/modificar frontend: pantallas, componentes, formularios, tablas, layout, tema claro/oscuro, tokens, cliente HTTP, sesión/errores, i18n, tipos desde OpenAPI, RBAC de UX. Fuente de verdad de la identidad visual y los patrones de pantalla. |
 | **nuevo-modulo** | Al iniciar un módulo/fase/pantalla nuevos: crea el **andamiaje** (esqueleto con TODOs) parejo en back y front. No implementa lógica de negocio. |
 | **migraciones-postgresql** | Al cambiar el esquema (tablas, columnas, índices, FKs, CHECKs, JSONB/pgvector). Claude genera y revisa la migración; **el equipo la aplica**. |
 | **revision-modulo** | "Definición de Terminado" antes de cerrar un módulo o abrir su PR: capas, modelo de datos, seguridad multiusuario, IA, pruebas, migraciones y documentación. |
@@ -168,14 +176,20 @@ Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesi
 
 ## Estado actual
 
-**Fase 0 COMPLETA. F0-T4b-2 (CRUD de projects + membresías + invariantes):** CRUD de projects
-con aislamiento y RBAC (gate de proyecto con rol efectivo; 404/403); **membresías de workspace y
-de proyecto** (listar/añadir/cambiar rol/quitar); **invariantes de servicio** probados: al menos
-un owner, **transferencia atómica** de propiedad, **guest=viewer** como regla dura, rol efectivo
-en el gate de proyecto, **borrado seguro de usuario** (`app/users/`, sin endpoint de baja).
-Reutiliza el mapeo de `IntegrityError` por constraint. **Sin migración.** Ver
-`docs/modulos/projects.md`, `docs/modulos/autorizacion.md`, `docs/API-CONTRACT.md`, ADR-0002/0008.
-**Pendiente (post-Fase 0):** CSRF (F0-T5), invitación por email, flujo de baja de cuenta, IA.
+**F0-T5a (cimientos de UI + endurecimiento de seguridad):** backend con **envelope de errores
+`{code, message}`** y manejador central (ADR-0009; `guest=viewer` reclasificado a 409) y **CSRF
+double-submit** (cookie `tf_csrf` + `X-CSRF-Token`, ADR-0010). Frontend: **tema claro/oscuro** por
+tokens, sin parpadeo, PrimeReact (Lara teal) sobre los tokens; **i18n es-MX** (sin textos
+hardcodeados); **cliente HTTP** (cookie de sesión, CSRF, 401→login, errores por `code`); **tipos
+desde OpenAPI** (commiteados, `task gen-types`); **flujo real** de login/registro/logout + guard
+de rutas + inicio placeholder. Vite proxya `/api` al backend en dev. **Sin migración.** Ver
+`docs/modulos/frontend.md`, `docs/API-CONTRACT.md`, ADR-0009/0010. Pantallas de dominio = F0-T5b.
+
+Hecho en Fase 0 (T4b-2): CRUD de projects + membresías + invariantes de servicio (al menos un
+owner, transferencia atómica, guest=viewer, borrado seguro de usuario). Ver ADR-0002/0008.
+
+**Pendiente:** pantallas de workspaces/projects (F0-T5b); `SameSite=Strict`/endurecimiento CSRF;
+invitación por email; flujo de baja de cuenta; IA/theming por usuario.
 
 Hecho en F0-T4b-1: núcleo de autorización (contexto por ruta, rol efectivo, matriz,
 `requiere_permiso`, `WorkspaceScopedRepository`, mapeo de `IntegrityError`) y endpoints mínimos

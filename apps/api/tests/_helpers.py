@@ -45,7 +45,11 @@ async def client() -> AsyncIterator[AsyncClient]:
 
 
 async def register_login(c: AsyncClient, email: str) -> UUID:
-    """Registra e inicia sesión; devuelve el user_id. Deja la cookie en el jar del cliente."""
+    """Registra e inicia sesión; devuelve el user_id.
+
+    Deja las cookies (sesión + CSRF) en el jar y fija el header ``X-CSRF-Token`` del cliente
+    para que las mutaciones siguientes pasen la validación double-submit (ADR-0010).
+    """
     reg = await c.post(
         "/api/v1/auth/register",
         json={"email": email, "password": PW, "display_name": "U"},
@@ -54,6 +58,9 @@ async def register_login(c: AsyncClient, email: str) -> UUID:
     user_id = UUID(reg.json()["user_id"])
     login = await c.post("/api/v1/auth/login", json={"email": email, "password": PW})
     assert login.status_code == 200, login.text
+    csrf = c.cookies.get("tf_csrf")
+    if csrf:
+        c.headers["X-CSRF-Token"] = csrf
     return user_id
 
 

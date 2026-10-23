@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TraceForge</title>
+    <!--
+      Anti-parpadeo (obligatorio): aplica la clase de tema ANTES de que React pinte, leyendo
+      localStorage. Sin esto, al recargar en oscuro se vería un destello claro. Arranca en CLARO.
+    -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("tf-theme");
+          if (t === "dark") document.documentElement.classList.add("theme-dark");
+        } catch (e) {
+          /* localStorage no disponible: queda el tema claro por defecto */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

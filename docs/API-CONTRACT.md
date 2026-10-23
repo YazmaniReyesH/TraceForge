@@ -8,6 +8,22 @@ Convenciones: prefijo **`/api/v1`**; cuerpos JSON; fechas en ISO-8601 UTC. La au
 viaja en una **cookie httpOnly** de sesión (ver ADR-0007); los endpoints también aceptan
 `Authorization: Bearer <jwt>` (clientes de API / pruebas).
 
+### Errores (envelope) — ADR-0009
+
+Todos los errores responden con `{ "code": "...", "message": "..." }`. El **`code`** es estable
+(el frontend lo mapea a i18n). Statuses: **422** validación de entrada (`validation_error`);
+**409** conflicto de negocio; **403** permiso (`forbidden`); **404** no encontrado / sin acceso
+(`not_found`); **401** no autenticado (`unauthenticated`). Códigos de negocio: `invalid_credentials`,
+`email_already_registered`, `sole_owner`, `cannot_assign_owner`, `already_owner`, `member_exists`,
+`not_a_member`, `not_workspace_member`, `guest_must_be_viewer`, `user_has_memberships`, `csrf_failed`.
+
+### CSRF (double-submit) — ADR-0010
+
+Toda **mutación con sesión** (POST/PATCH/DELETE) exige el header **`X-CSRF-Token`** con el valor
+de la cookie legible **`tf_csrf`** (emitida en `login`, `GET /auth/me` y `GET /auth/csrf`). Sin
+coincidencia → **403** `csrf_failed`. Los **GET nunca mutan** y no se validan. `login`/`register`
+están **exentos** (arranque, pre-sesión); `logout` **sí** exige CSRF.
+
 ---
 
 ## Autenticación — `/api/v1/auth` (F0-T4a)
@@ -39,18 +55,24 @@ ahora ningún endpoint resuelve permisos de workspace/proyecto.
 - **200** → `UserRead` y **Set-Cookie** `tf_session=<jwt>` (httpOnly, SameSite=Lax, Secure en prod).
 - **Errores:** `401` `{"detail":"Credenciales inválidas"}` si el email no existe **o** la
   contraseña es incorrecta (mismo mensaje, sin enumeración); `422` validación.
-- **Nota:** email case-insensitive (`Ana@ACME.com` === `ana@acme.com`).
+- **Nota:** email case-insensitive (`Ana@ACME.com` === `ana@acme.com`). Emite además la cookie
+  CSRF `tf_csrf` (ADR-0010).
 
 ### POST `/api/v1/auth/logout`
-- **Permiso:** público/idempotente (no exige token válido).
-- **204** sin cuerpo; borra la cookie `tf_session`.
+- **Permiso:** sesión + **CSRF** (`X-CSRF-Token`). Idempotente.
+- **204** sin cuerpo; borra las cookies `tf_session` y `tf_csrf`.
+- **Errores:** `403` `csrf_failed` si falta/no coincide el token CSRF.
 - **Nota:** el JWT es stateless; el token sigue válido hasta expirar (sin revocación aún — ver
   ADR-0007).
 
 ### GET `/api/v1/auth/me`
 - **Permiso:** autenticado (cookie `tf_session` o `Authorization: Bearer`).
-- **200** → `UserRead` del usuario autenticado.
-- **Errores:** `401` `{"detail":"No autenticado"}` si falta el token, es inválido o expiró.
+- **200** → `UserRead`; **renueva** la cookie `tf_csrf` (para hidratar la sesión en la SPA).
+- **Errores:** `401` `{"code":"unauthenticated"}` si falta el token, es inválido o expiró.
+
+### GET `/api/v1/auth/csrf`
+- **Permiso:** público. **204**; emite/renueva la cookie `tf_csrf`. Útil para obtener un token
+  antes de una mutación.
 
 ---
 
@@ -117,11 +139,11 @@ acceso pero su rol efectivo no permite la acción. owner/admin tienen piso impl�
 
 - **GET** — listar. Permiso `projects:read`. 200 → `[ProjectMemberRead]`.
 - **POST** `{ "email", "role": lead|contributor|viewer }` — añadir **miembro del workspace** al
-  proyecto. Permiso `projects:manage_members` (lead). 201. Errores: `404` email no existe; `422`
-  si el usuario no es miembro del workspace; `422` **regla dura guest=viewer** (un guest de
-  workspace solo puede ser `viewer`); `409` ya es miembro.
+  proyecto. Permiso `projects:manage_members` (lead). 201. Errores: `404` email no existe (`user_not_found`);
+  `409` `not_workspace_member` si el usuario no es miembro del workspace; `409` **regla dura
+  guest=viewer** (`guest_must_be_viewer`); `409` `member_exists`.
 - **PATCH** `/{user_id}` `{ "role" }` — cambiar rol. Permiso `projects:manage_members`. 200 /
-  404 / `422` (guest=viewer).
+  404 / `409` (`guest_must_be_viewer`).
 - **DELETE** `/{user_id}` — quitar. Permiso `projects:manage_members`. 204 / 404.
 
 ---

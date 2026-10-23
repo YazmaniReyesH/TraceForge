@@ -1,10 +1,15 @@
-"""Router de projects y de membresías de proyecto (delgado). Rutas bajo el workspace."""
+"""Router de projects y de membresías de proyecto (delgado).
+
+Errores de dominio → envelope central (ADR-0009); CSRF a nivel de router (ADR-0010).
+"""
 
 from collections.abc import Sequence
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
+from app.core.csrf import require_csrf
+from app.core.errors import NotFoundError
 from app.core.security import (
     Permission,
     ProjectContext,
@@ -15,12 +20,6 @@ from app.core.security import (
 )
 from app.models import Project
 from app.projects.dependencies import get_project_service
-from app.projects.errors import (
-    GuestMustBeViewerError,
-    NotWorkspaceMemberError,
-    ProjectMemberExistsError,
-    UserNotFoundError,
-)
 from app.projects.schemas import (
     ProjectCreate,
     ProjectMemberAdd,
@@ -31,7 +30,11 @@ from app.projects.schemas import (
 )
 from app.projects.service import ProjectService
 
-router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/projects", tags=["projects"])
+router = APIRouter(
+    prefix="/api/v1/workspaces/{workspace_id}/projects",
+    tags=["projects"],
+    dependencies=[Depends(require_csrf)],  # CSRF en mutaciones (los GET se saltan solos)
+)
 
 # Dependencias de permiso como singletons de módulo (evita B008).
 _puede_crear = requiere_permiso(Permission.PROJECTS_CREATE)
@@ -69,7 +72,7 @@ async def get_project(
 ) -> Project:
     project = await service.get(context.project_id)
     if project is None:  # defensivo: el contexto ya validó existencia/acceso
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado")
+        raise NotFoundError("Proyecto no encontrado")
     return project
 
 
@@ -81,7 +84,7 @@ async def update_project(
 ) -> Project:
     project = await service.update(context.project_id, data)
     if project is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado")
+        raise NotFoundError("Proyecto no encontrado")
     return project
 
 
@@ -123,26 +126,9 @@ async def add_project_member(
     context: ProjectContext = Depends(_puede_gestionar_miembros),
     service: ProjectService = Depends(get_project_service),
 ) -> ProjectMemberRead:
-    try:
-        user, membership = await service.add_member(
-            project_id=context.project_id, email=data.email, role=data.role
-        )
-    except UserNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado") from exc
-    except NotWorkspaceMemberError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "El usuario no es miembro del workspace",
-        ) from exc
-    except GuestMustBeViewerError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Un invitado (guest) solo puede ser viewer del proyecto",
-        ) from exc
-    except ProjectMemberExistsError as exc:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, "El usuario ya es miembro del proyecto"
-        ) from exc
+    user, membership = await service.add_member(
+        project_id=context.project_id, email=data.email, role=data.role
+    )
     return ProjectMemberRead(
         user_id=user.user_id,
         email=user.email,
@@ -158,20 +144,12 @@ async def change_project_member_role(
     context: ProjectContext = Depends(_puede_gestionar_miembros),
     service: ProjectService = Depends(get_project_service),
 ) -> ProjectMemberRead:
-    try:
-        membership = await service.change_member_role(
-            project_id=context.project_id, user_id=user_id, role=data.role
-        )
-    except GuestMustBeViewerError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Un invitado (guest) solo puede ser viewer del proyecto",
-        ) from exc
+    membership = await service.change_member_role(
+        project_id=context.project_id, user_id=user_id, role=data.role
+    )
     if membership is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Miembro no encontrado")
-    # Relee el usuario para la respuesta.
-    rows = await service.list_members(context.project_id)
-    for user, m in rows:
+        raise NotFoundError("Miembro no encontrado")
+    for user, m in await service.list_members(context.project_id):
         if m.user_id == user_id:
             return ProjectMemberRead(
                 user_id=user.user_id,
@@ -179,7 +157,7 @@ async def change_project_member_role(
                 display_name=user.display_name,
                 role=m.role,
             )
-    raise HTTPException(status.HTTP_404_NOT_FOUND, "Miembro no encontrado")
+    raise NotFoundError("Miembro no encontrado")
 
 
 @router.delete("/{project_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -190,4 +168,4 @@ async def remove_project_member(
 ) -> None:
     removed = await service.remove_member(project_id=context.project_id, user_id=user_id)
     if not removed:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Miembro no encontrado")
+        raise NotFoundError("Miembro no encontrado")
