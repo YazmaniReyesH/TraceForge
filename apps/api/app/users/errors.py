@@ -1,16 +1,19 @@
-"""Errores de dominio de usuarios."""
+"""Errores de dominio de usuarios (envelope {code, message})."""
+
+from app.core.errors import DomainError
 
 
-class UserError(Exception):
+class UserError(DomainError):
     """Base de los errores de usuarios."""
 
 
 class UserNotFoundError(UserError):
-    """No existe el usuario."""
+    code = "user_not_found"
+    status_code = 404
+    default_message = "Usuario no encontrado"
 
 
 class UserHasMembershipsError(UserError):
-    """El usuario tiene membresías (workspace o proyecto): no puede borrarse (RESTRICT).
-
-    El flujo seguro de baja (revocar membresías / transferir titularidades) es de otra fase.
-    """
+    code = "user_has_memberships"
+    status_code = 409
+    default_message = "El usuario tiene membresías: no puede borrarse"

@@ -4,7 +4,7 @@ from functools import lru_cache
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.hashing import Argon2Hasher
@@ -15,6 +15,7 @@ from app.auth.service import AuthService
 from app.auth.tokens import decode_access_token
 from app.core.config import Settings, get_settings
 from app.core.db import get_session
+from app.core.errors import UnauthenticatedError
 from app.models import User
 
 
@@ -68,30 +69,24 @@ async def get_current_user(
 
     NO resuelve workspace activo ni rol (eso es F0-T4b).
     """
-    unauthorized = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="No autenticado",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
     token = _extract_token(request, settings.auth_cookie_name)
     if not token:
-        raise unauthorized
+        raise UnauthenticatedError()
 
     try:
         payload = decode_access_token(token, settings)
     except jwt.PyJWTError as exc:
-        raise unauthorized from exc
+        raise UnauthenticatedError() from exc
 
     subject = payload.get("sub")
     if not isinstance(subject, str):
-        raise unauthorized
+        raise UnauthenticatedError()
     try:
         user_id = UUID(subject)
     except ValueError as exc:
-        raise unauthorized from exc
+        raise UnauthenticatedError() from exc
 
     user = await UserRepository(session).get_user_by_id(user_id)
     if user is None:
-        raise unauthorized
+        raise UnauthenticatedError()
     return user

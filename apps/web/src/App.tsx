@@ -1,55 +1,24 @@
-import { useEffect, useState } from "react";
+// Enrutado: rutas públicas (/login, /register) y área protegida (guard de sesión).
 
-import { getHealth, type HealthResponse } from "./api";
+import { Navigate, Route, Routes } from "react-router-dom";
 
-type Estado =
-  { tipo: "cargando" } | { tipo: "ok"; datos: HealthResponse } | { tipo: "error"; mensaje: string };
+import { ProtectedRoute } from "./modules/auth/components/ProtectedRoute";
+import { LoginPage } from "./modules/auth/pages/LoginPage";
+import { RegisterPage } from "./modules/auth/pages/RegisterPage";
+import { HomePage } from "./modules/home/pages/HomePage";
+import { AppLayout } from "./shared/ui/AppLayout";
 
-function App() {
-  const [estado, setEstado] = useState<Estado>({ tipo: "cargando" });
-
-  useEffect(() => {
-    let activo = true;
-    getHealth()
-      .then((datos) => {
-        if (activo) setEstado({ tipo: "ok", datos });
-      })
-      .catch((error: unknown) => {
-        const mensaje = error instanceof Error ? error.message : "Error desconocido";
-        if (activo) setEstado({ tipo: "error", mensaje });
-      });
-    return () => {
-      activo = false;
-    };
-  }, []);
-
+export default function App() {
   return (
-    <main className="app">
-      <h1>TraceForge</h1>
-      <p className="subtitle">Documentación técnica para TI / Ciberseguridad</p>
-
-      <section className="health-card">
-        <h2>Estado del backend</h2>
-        {estado.tipo === "cargando" && (
-          <p>
-            Consultando <code>/health</code>…
-          </p>
-        )}
-        {estado.tipo === "ok" && (
-          <p>
-            <span className="badge badge-ok">{estado.datos.status}</span>
-            <span className="version">versión {estado.datos.version}</span>
-          </p>
-        )}
-        {estado.tipo === "error" && (
-          <p>
-            <span className="badge badge-error">sin conexión</span>
-            <span className="version">{estado.mensaje}</span>
-          </p>
-        )}
-      </section>
-    </main>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<HomePage />} />
+        </Route>
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
-
-export default App;

@@ -21,15 +21,16 @@ def test_guest_must_be_viewer_is_enforced() -> None:
                     f"/api/v1/workspaces/{wid}/members", json={"email": guest, "role": "guest"}
                 )
                 members = f"{base}/{pid}/members"
-                # guest + contributor -> rechazado (regla dura, 422).
+                # guest + contributor -> rechazado (regla dura, 409 conflicto de negocio).
                 bad = await co.post(members, json={"email": guest, "role": "contributor"})
-                assert bad.status_code == 422, bad.text
+                assert bad.status_code == 409, bad.text
+                assert bad.json()["code"] == "guest_must_be_viewer"
                 # guest + viewer -> permitido.
                 ok = await co.post(members, json={"email": guest, "role": "viewer"})
                 assert ok.status_code == 201, ok.text
                 # Cambiar a contributor tampoco se permite.
                 chg = await co.patch(f"{members}/{g_id}", json={"role": "contributor"})
-                assert chg.status_code == 422
+                assert chg.status_code == 409
         finally:
             await cleanup([owner, guest])
 
@@ -81,7 +82,8 @@ def test_project_member_must_be_workspace_member() -> None:
                 resp = await co.post(
                     f"{base}/{pid}/members", json={"email": outsider, "role": "viewer"}
                 )
-                assert resp.status_code == 422, resp.text  # no es miembro del workspace
+                assert resp.status_code == 409, resp.text  # no es miembro del workspace
+                assert resp.json()["code"] == "not_workspace_member"
         finally:
             await cleanup([owner, outsider])
 

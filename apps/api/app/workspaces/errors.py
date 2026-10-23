@@ -1,29 +1,43 @@
-"""Errores de dominio de workspaces y membresías. El router los traduce a HTTP."""
+"""Errores de dominio de workspaces y membresías (envelope {code, message})."""
+
+from app.core.errors import DomainError
 
 
-class WorkspaceError(Exception):
+class WorkspaceError(DomainError):
     """Base de los errores de workspaces."""
 
 
 class UserNotFoundError(WorkspaceError):
-    """No existe un usuario con ese email (alta de miembro)."""
+    code = "user_not_found"
+    status_code = 404
+    default_message = "Usuario no encontrado"
 
 
 class MemberExistsError(WorkspaceError):
-    """El usuario ya es miembro del workspace."""
+    code = "member_exists"
+    status_code = 409
+    default_message = "El usuario ya es miembro"
 
 
 class NotWorkspaceMemberError(WorkspaceError):
-    """El usuario objetivo no es miembro del workspace."""
+    code = "not_a_member"
+    status_code = 404
+    default_message = "Miembro no encontrado"
 
 
 class CannotAssignOwnerRoleError(WorkspaceError):
-    """No se asigna ``owner`` directamente: la propiedad se mueve por transferencia."""
+    code = "cannot_assign_owner"
+    status_code = 409
+    default_message = "El rol owner se asigna transfiriendo la propiedad"
 
 
 class CannotModifySoleOwnerError(WorkspaceError):
-    """No se puede degradar ni quitar al único owner (invariante "al menos un owner")."""
+    code = "sole_owner"
+    status_code = 409
+    default_message = "No puedes degradar ni quitar al único owner; transfiere la propiedad"
 
 
 class AlreadyOwnerError(WorkspaceError):
-    """El destinatario de la transferencia ya es el owner."""
+    code = "already_owner"
+    status_code = 409
+    default_message = "Ese usuario ya es el owner"

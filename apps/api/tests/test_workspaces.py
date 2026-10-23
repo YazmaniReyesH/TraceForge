@@ -55,6 +55,10 @@ async def _register(client: AsyncClient, email: str) -> dict[str, object]:
 async def _login(client: AsyncClient, email: str) -> None:
     resp = await client.post("/api/v1/auth/login", json={"email": email, "password": _PW})
     assert resp.status_code == 200, resp.text
+    # CSRF double-submit: enviar el token en las mutaciones siguientes (ADR-0010).
+    csrf = client.cookies.get("tf_csrf")
+    if csrf:
+        client.headers["X-CSRF-Token"] = csrf
 
 
 async def _cleanup(emails: list[str]) -> None:

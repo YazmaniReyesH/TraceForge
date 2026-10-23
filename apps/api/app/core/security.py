@@ -21,12 +21,13 @@ from dataclasses import dataclass
 from enum import StrEnum
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
 from app.core.db import get_session
+from app.core.errors import ForbiddenError, NotFoundError
 from app.models import Project, ProjectMembership, User, WorkspaceMembership
 from app.models.enums import ProjectRole, WorkspaceRole
 
@@ -142,7 +143,7 @@ async def get_workspace_context(
     )
     membership = (await session.execute(stmt)).scalar_one_or_none()
     if membership is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace no encontrado")
+        raise NotFoundError("Workspace no encontrado")
     return WorkspaceContext(user=user, workspace_id=workspace_id, workspace_role=membership.role)
 
 
@@ -155,10 +156,7 @@ def requiere_permiso(
         context: WorkspaceContext = Depends(get_workspace_context),
     ) -> WorkspaceContext:
         if not has_permission(context.workspace_role, action):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="No tienes permiso para esta acción",
-            )
+            raise ForbiddenError()
         return context
 
     return checker
@@ -190,7 +188,7 @@ async def get_project_context(
     """
     project = await session.get(Project, project_id)
     if project is None or project.workspace_id != workspace.workspace_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado")
+        raise NotFoundError("Proyecto no encontrado")
 
     stmt = select(ProjectMembership).where(
         ProjectMembership.project_id == project_id,
@@ -201,7 +199,7 @@ async def get_project_context(
         workspace.workspace_role, membership.role if membership else None
     )
     if effective is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado")
+        raise NotFoundError("Proyecto no encontrado")
 
     return ProjectContext(
         user=workspace.user,
@@ -221,10 +219,7 @@ def requiere_permiso_proyecto(
         context: ProjectContext = Depends(get_project_context),
     ) -> ProjectContext:
         if not has_project_permission(context.effective_role, action):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="No tienes permiso para esta acción",
-            )
+            raise ForbiddenError()
         return context
 
     return checker

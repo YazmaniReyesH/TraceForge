@@ -47,3 +47,6 @@ Thumbs.db
 
 # ── Herramientas ──
 .task/
+
+# OpenAPI volcado intermedio para generar tipos del frontend (task gen-types)
+apps/api/openapi.json

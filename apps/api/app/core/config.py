@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     auth_cookie_secure: bool = False
     auth_cookie_samesite: str = "lax"
 
+    # CSRF double-submit (ADR-0010): cookie LEGIBLE por JS + header X-CSRF-Token.
+    csrf_cookie_name: str = "tf_csrf"
+
     # Argon2id: factor de costo configurable (ver app/auth/hashing.py).
     argon2_time_cost: int = 3
     argon2_memory_cost: int = 65536  # KiB (64 MiB)
