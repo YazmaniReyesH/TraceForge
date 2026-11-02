@@ -39,6 +39,7 @@ documento da el panorama y enlaza a cada uno, sin duplicar su contenido.
 | [0008](./adr/0008-nucleo-de-autorizacion.md) | Núcleo de autorización: alcance por ruta, rol efectivo y matriz de permisos | aceptado |
 | [0009](./adr/0009-convencion-de-errores-api.md) | Convención de errores de la API (envelope {code, message}) | aceptado |
 | [0010](./adr/0010-csrf-double-submit.md) | Protección CSRF con double-submit token | aceptado |
+| [0011](./adr/0011-edicion-y-borrado-protegido-de-workspace.md) | Edición y borrado protegido de workspace | aceptado |
 
 Documentos relacionados: [`seguridad-datos.md`](./seguridad-datos.md) (resumen operativo de
 seguridad/redacción; lo gobierna el ADR-0005) y la ficha

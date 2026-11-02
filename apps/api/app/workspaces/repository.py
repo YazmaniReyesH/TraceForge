@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from uuid import UUID, uuid4
 
-from sqlalchemy import Row, delete, select
+from sqlalchemy import Row, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Project, ProjectMembership, User, Workspace, WorkspaceMembership
@@ -42,6 +42,24 @@ class WorkspaceRepository:
     async def get_by_id(self, workspace_id: UUID) -> Workspace | None:
         """Devuelve un workspace por id (sin verificar membresía)."""
         return await self._session.get(Workspace, workspace_id)
+
+    async def count_projects(self, workspace_id: UUID) -> int:
+        """Número de projects del workspace (para el borrado protegido)."""
+        stmt = select(func.count()).select_from(Project).where(Project.workspace_id == workspace_id)
+        return int((await self._session.execute(stmt)).scalar_one())
+
+    async def count_members(self, workspace_id: UUID) -> int:
+        """Número de membresías del workspace (para el borrado protegido)."""
+        stmt = (
+            select(func.count())
+            .select_from(WorkspaceMembership)
+            .where(WorkspaceMembership.workspace_id == workspace_id)
+        )
+        return int((await self._session.execute(stmt)).scalar_one())
+
+    async def delete_workspace(self, workspace: Workspace) -> None:
+        """Borra el workspace (la única membresía restante cae por cascada)."""
+        await self._session.delete(workspace)
 
     async def list_for_user(self, user_id: UUID) -> Sequence[Workspace]:
         """Workspaces donde el usuario tiene membresía (aislamiento: solo los suyos)."""

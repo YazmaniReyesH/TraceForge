@@ -185,10 +185,18 @@ export interface paths {
         get: operations["get_workspace_api_v1_workspaces__workspace_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Workspace
+         * @description Elimina el workspace (solo owner) si está vacío (sin projects ni otros miembros).
+         */
+        delete: operations["delete_workspace_api_v1_workspaces__workspace_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Workspace
+         * @description Edita el nombre del workspace (owner/admin).
+         */
+        patch: operations["update_workspace_api_v1_workspaces__workspace_id__patch"];
         trace?: never;
     };
     "/api/v1/workspaces/{workspace_id}/members": {
@@ -323,6 +331,26 @@ export interface paths {
         patch: operations["change_project_member_role_api_v1_workspaces__workspace_id__projects__project_id__members__user_id__patch"];
         trace?: never;
     };
+    "/api/v1/me/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Projects
+         * @description Proyectos accesibles por el usuario en todos sus workspaces, con su rol efectivo.
+         */
+        get: operations["my_projects_api_v1_me_projects_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -354,6 +382,32 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /**
+         * MyProjectRead
+         * @description Un proyecto accesible por el usuario, con el contexto de su workspace y su rol efectivo.
+         */
+        MyProjectRead: {
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+            /** Workspace Name */
+            workspace_name: string;
+            role: components["schemas"]["ProjectRole"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * ProjectCreate
@@ -576,6 +630,14 @@ export interface components {
          * @enum {string}
          */
         WorkspaceRole: "owner" | "admin" | "member" | "guest";
+        /**
+         * WorkspaceUpdate
+         * @description Edición de un workspace (por ahora, el nombre).
+         */
+        WorkspaceUpdate: {
+            /** Name */
+            name: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -810,6 +872,70 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_workspace_api_v1_workspaces__workspace_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_workspace_api_v1_workspaces__workspace_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceUpdate"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -1292,6 +1418,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_projects_api_v1_me_projects_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyProjectRead"][];
                 };
             };
         };

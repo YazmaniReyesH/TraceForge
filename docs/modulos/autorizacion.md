@@ -78,6 +78,16 @@ patrón por defecto. El `workspace_id` proviene del `WorkspaceContext`, nunca de
 `projects:create` es acción de **workspace** (owner/admin). owner/admin tienen piso efectivo =
 `lead` en cualquier proyecto.
 
+## Vista transversal del usuario (F0-T5b)
+
+`GET /api/v1/me/projects` (módulo `app/me/`) resuelve los proyectos accesibles por el usuario en
+**todos** sus workspaces **sin** pasar por el gate de un workspace (solo `get_current_user`). Es
+la salida de navegación para un **guest**, que no tiene `workspaces:read` y por tanto no puede
+abrir el workspace, pero sí debe llegar a los proyectos que se le compartieron. Reusa
+`effective_project_role` por item. No es fuga: la unión (owner/admin ⇒ todos sus projects; member/
+guest ⇒ solo sus membresías de proyecto) solo devuelve lo que el usuario ya puede ver. Ver
+`docs/API-CONTRACT.md`.
+
 ## Manejo de `IntegrityError` por constraint
 
 `app/core/integrity.py` (`constraint_name`, `translate_integrity_error`) + nombres en

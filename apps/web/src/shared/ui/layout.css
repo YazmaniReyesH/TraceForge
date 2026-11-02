@@ -16,11 +16,40 @@
   border-bottom: 1px solid var(--border);
 }
 
+.tf-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
 .tf-brand {
   font-weight: 600;
   font-size: 1.1rem;
   color: var(--text-strong);
   letter-spacing: 0.2px;
+  text-decoration: none;
+}
+
+.tf-nav {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.tf-nav-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+  padding: var(--space-1) 0;
+  border-bottom: 2px solid transparent;
+}
+
+.tf-nav-link:hover {
+  color: var(--text);
+}
+
+.tf-nav-link--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 .tf-header-actions {
@@ -91,4 +120,92 @@
   border-radius: var(--radius-lg);
   padding: var(--space-6);
   box-shadow: var(--shadow-sm);
+}
+
+/* Patrón lista + detalle */
+.tf-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.tf-page-title {
+  margin: 0;
+  color: var(--text-strong);
+}
+
+.tf-page-subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.tf-breadcrumb {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-4);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.tf-breadcrumb a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.tf-detail {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.tf-detail-section h3 {
+  margin: 0 0 var(--space-3);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tf-member-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.tf-member-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.tf-member-email {
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tf-member-sub {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.tf-row-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.tf-stack {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.tf-detail-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }

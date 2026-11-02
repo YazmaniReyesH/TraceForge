@@ -18,6 +18,8 @@
   /* Acentos */
   --accent: #0e9aa3;
   --accent-contrast: #ffffff;
+  /* Teal TENUE para hover/selección suave (fondo claro con texto --text-strong legible). */
+  --accent-subtle: #d7f0f2;
   --focus-ring: #14c0c9;
   --ai: #7c5cff;
 
@@ -71,6 +73,8 @@
   /* Acentos (oscuro) */
   --accent: #22d3db;
   --accent-contrast: #04121a;
+  /* Teal TENUE oscuro (fondo oscuro con tinte teal; texto --text-strong legible). */
+  --accent-subtle: #16343d;
   --focus-ring: #2ce6ef;
   --ai: #9d86ff;
 
@@ -137,4 +141,29 @@ pre,
   --focus-ring: 0 0 0 2px var(--focus-ring) !important;
   --border-radius: var(--radius-md) !important;
   --font-family: var(--font-ui) !important;
+  /* Variables de "highlight" para los componentes que SÍ las respetan (menu, listbox, etc.). */
+  --highlight-bg: var(--surface-raised) !important;
+  --highlight-text-color: var(--text-strong) !important;
+}
+
+/*
+ * Fix de contraste del ítem SELECCIONADO del Dropdown (dropdown de rol en miembros de workspace
+ * y de proyecto). Lara *hardcodea* `color` y `background` a #0f766e (teal sobre teal → texto
+ * ilegible) en vez de usar variables, por eso no se corrige vía tokens. Se sobreescribe la regla
+ * con nuestros tokens (superficie elevada + texto fuerte) y !important para ganar al stylesheet de
+ * Lara (que se inserta dinámicamente). Legible en claro y oscuro.
+ */
+/* Ítem SELECCIONADO: acento sólido + su color de contraste (misma pareja que el botón primario). */
+.p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight,
+.p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight.p-focus {
+  background: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+}
+
+/* Ítem en HOVER/FOCUS no seleccionado: teal tenue + texto fuerte (se distingue del seleccionado
+   y queda legible). */
+.p-dropdown-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight):hover,
+.p-dropdown-panel .p-dropdown-items .p-dropdown-item:not(.p-highlight).p-focus {
+  background: var(--accent-subtle) !important;
+  color: var(--text-strong) !important;
 }

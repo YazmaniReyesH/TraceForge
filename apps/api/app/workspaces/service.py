@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constraints import WORKSPACE_MEMBERSHIP_UNIQUE
+from app.core.errors import NotFoundError
 from app.core.integrity import translate_integrity_error
 from app.models import User, Workspace, WorkspaceMembership
 from app.models.enums import WorkspaceRole
@@ -23,6 +24,7 @@ from app.workspaces.errors import (
     MemberExistsError,
     NotWorkspaceMemberError,
     UserNotFoundError,
+    WorkspaceNotEmptyError,
 )
 from app.workspaces.repository import WorkspaceRepository
 
@@ -59,6 +61,31 @@ class WorkspaceService:
     async def get(self, workspace_id: UUID) -> Workspace | None:
         """Devuelve el workspace por id. La membresía ya la verificó el contexto."""
         return await self._repo.get_by_id(workspace_id)
+
+    async def rename(self, *, workspace_id: UUID, name: str) -> Workspace:
+        """Renombra el workspace (permiso workspaces:update validado en el router)."""
+        workspace = await self._repo.get_by_id(workspace_id)
+        if workspace is None:  # defensivo: el contexto ya garantizó existencia
+            raise NotFoundError("Workspace no encontrado")
+        workspace.name = name
+        await self._session.commit()
+        return workspace
+
+    async def delete(self, *, workspace_id: UUID) -> None:
+        """Borrado PROTEGIDO: solo si no tiene projects y el único miembro es el owner.
+
+        Evita un borrado en cascada destructivo. El borrado "con contenido" queda para una
+        función futura más protegida. [[POR LLENAR: borrado de workspace con contenido]].
+        """
+        if await self._repo.count_projects(workspace_id) > 0:
+            raise WorkspaceNotEmptyError
+        if await self._repo.count_members(workspace_id) > 1:
+            raise WorkspaceNotEmptyError
+        workspace = await self._repo.get_by_id(workspace_id)
+        if workspace is None:  # defensivo
+            raise NotFoundError("Workspace no encontrado")
+        await self._repo.delete_workspace(workspace)
+        await self._session.commit()
 
     # ── Gestión de miembros ──
     async def list_members(

@@ -14,6 +14,12 @@ class WorkspaceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
 
 
+class WorkspaceUpdate(BaseModel):
+    """Edición de un workspace (por ahora, el nombre)."""
+
+    name: str = Field(min_length=1, max_length=200)
+
+
 class WorkspaceRead(BaseModel):
     """Representación pública de un workspace."""
 
