@@ -22,6 +22,7 @@ from app.workspaces.schemas import (
     WorkspaceMemberRead,
     WorkspaceMemberRoleUpdate,
     WorkspaceRead,
+    WorkspaceUpdate,
 )
 from app.workspaces.service import WorkspaceService
 
@@ -33,6 +34,8 @@ router = APIRouter(
 
 # Dependencias de permiso como singletons de módulo (evita llamar al factory en el default).
 _requiere_lectura = requiere_permiso(Permission.WORKSPACES_READ)
+_puede_editar = requiere_permiso(Permission.WORKSPACES_UPDATE)
+_puede_borrar = requiere_permiso(Permission.WORKSPACES_DELETE)
 _gestiona_miembros = requiere_permiso(Permission.WORKSPACES_MANAGE_MEMBERS)
 _transfiere = requiere_permiso(Permission.WORKSPACES_TRANSFER_OWNERSHIP)
 
@@ -66,6 +69,25 @@ async def get_workspace(
     if workspace is None:  # defensivo: la membresía implica que existe
         raise NotFoundError("Workspace no encontrado")
     return workspace
+
+
+@router.patch("/{workspace_id}", response_model=WorkspaceRead)
+async def update_workspace(
+    data: WorkspaceUpdate,
+    context: WorkspaceContext = Depends(_puede_editar),
+    service: WorkspaceService = Depends(get_workspace_service),
+) -> Workspace:
+    """Edita el nombre del workspace (owner/admin)."""
+    return await service.rename(workspace_id=context.workspace_id, name=data.name)
+
+
+@router.delete("/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_workspace(
+    context: WorkspaceContext = Depends(_puede_borrar),
+    service: WorkspaceService = Depends(get_workspace_service),
+) -> None:
+    """Elimina el workspace (solo owner) si está vacío (sin projects ni otros miembros)."""
+    await service.delete(workspace_id=context.workspace_id)
 
 
 # ── Membresías de workspace ──

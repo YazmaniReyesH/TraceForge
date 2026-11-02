@@ -1,0 +1,15 @@
+# Normaliza finales de línea a LF en el repo (coherente con .editorconfig y prettier endOfLine=lf).
+# Evita que en Windows git haga checkout con CRLF y rompa `prettier --check` / lint.
+* text=auto eol=lf
+
+# Binarios: sin normalización.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary

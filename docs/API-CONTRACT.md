@@ -100,6 +100,18 @@ permisos en `docs/modulos/autorizacion.md`.
 - **Errores:** `401` sin sesión; `404` si no eres miembro o el workspace no existe (mismo
   cuerpo, sin filtrar existencia); `403` si eres miembro pero tu rol no puede leer (p. ej. guest).
 
+### PATCH `/api/v1/workspaces/{workspace_id}` (F0-T5b)
+- **Permiso:** `workspaces:update` (owner/admin). CSRF.
+- **Cuerpo:** `{ "name": "<1..200>" }`. **200** → `WorkspaceRead`.
+- **Errores:** `403` `forbidden`; `404` no miembro / no existe; `422` validación.
+
+### DELETE `/api/v1/workspaces/{workspace_id}` (F0-T5b)
+- **Permiso:** `workspaces:delete` (**solo owner**). CSRF.
+- **Borrado PROTEGIDO** (ADR-0011): solo si el workspace **no tiene projects** y su **único
+  miembro es el owner**. **204** si se elimina.
+- **Errores:** `403` `forbidden` (no owner); `409` `workspace_not_empty` (tiene projects u otros
+  miembros); `404` no miembro / no existe.
+
 ### Membresías de workspace — `/api/v1/workspaces/{workspace_id}/members` (F0-T4b-2)
 
 - **GET** — listar miembros. Permiso `workspaces:read`. 200 → `[WorkspaceMemberRead]`.
@@ -145,6 +157,25 @@ acceso pero su rol efectivo no permite la acción. owner/admin tienen piso impl�
 - **PATCH** `/{user_id}` `{ "role" }` — cambiar rol. Permiso `projects:manage_members`. 200 /
   404 / `409` (`guest_must_be_viewer`).
 - **DELETE** `/{user_id}` — quitar. Permiso `projects:manage_members`. 204 / 404.
+
+---
+
+## Vistas del usuario — `/api/v1/me` (F0-T5b)
+
+Vistas **transversales** acotadas al usuario autenticado (solo sesión; **sin** `requiere_permiso`
+de workspace). No filtran nada que el usuario no pueda ver ya.
+
+### GET `/api/v1/me/projects`
+- **Permiso:** autenticado. Devuelve los proyectos accesibles por el usuario a través de **todos**
+  sus workspaces: los de workspaces donde es **owner/admin** (acceso implícito a todos sus
+  projects) **unidos** a los projects donde tiene **membresía de proyecto** explícita (member/guest).
+- **200** → `[MyProjectRead]` = `{ project_id, name, workspace_id, workspace_name, role, created_at }`,
+  donde `role` es el **rol efectivo** del usuario sobre el project (ADR-0002; owner/admin ⇒ `lead`).
+  Ordenado por `workspace_name`, `created_at`. **401** sin sesión.
+- **Ejemplo:** un `guest` que es `viewer` de un solo project ve **solo** ese project (no los demás
+  del workspace); un `member` sin membresía de proyecto ve `[]`.
+- **Uso en UI:** pantalla "Mis proyectos", para que un guest llegue a su project sin entrar al
+  workspace (no tiene `workspaces:read`).
 
 ---
 

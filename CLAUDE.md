@@ -63,8 +63,10 @@ TraceForge/
         main.tsx · App.tsx     # providers (Theme/Query/Router/PrimeReact) + rutas
         shared/theme/          # tokens.css (FUENTE ÚNICA), ThemeProvider, tema PrimeReact
         shared/api/            # cliente HTTP (CSRF, 401, errores), types.gen.ts (OpenAPI)
-        shared/i18n/           # es-MX (sin textos hardcodeados) · shared/ui/ (layout, loader)
-        modules/auth/          # login/register/logout, guard, hooks · modules/home/ (placeholder)
+        shared/i18n/           # es-MX (sin textos hardcodeados) · shared/ui/ (layout, loader, estados)
+        modules/auth/          # login/register/logout, guard, hooks
+        modules/workspaces/ · modules/projects/   # pantallas de dominio (lista+detalle, miembros)
+        modules/me/            # vista transversal "Mis proyectos" (/projects)
   packages/
     shared/     # (placeholder) cliente TS generado desde OpenAPI — aún vacío
   docs/
@@ -176,20 +178,26 @@ Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesi
 
 ## Estado actual
 
-**F0-T5a (cimientos de UI + endurecimiento de seguridad):** backend con **envelope de errores
-`{code, message}`** y manejador central (ADR-0009; `guest=viewer` reclasificado a 409) y **CSRF
-double-submit** (cookie `tf_csrf` + `X-CSRF-Token`, ADR-0010). Frontend: **tema claro/oscuro** por
-tokens, sin parpadeo, PrimeReact (Lara teal) sobre los tokens; **i18n es-MX** (sin textos
-hardcodeados); **cliente HTTP** (cookie de sesión, CSRF, 401→login, errores por `code`); **tipos
-desde OpenAPI** (commiteados, `task gen-types`); **flujo real** de login/registro/logout + guard
-de rutas + inicio placeholder. Vite proxya `/api` al backend en dev. **Sin migración.** Ver
-`docs/modulos/frontend.md`, `docs/API-CONTRACT.md`, ADR-0009/0010. Pantallas de dominio = F0-T5b.
+**Fase 0 COMPLETA. F0-T5b (pantallas de dominio + edición/borrado de workspace + "Mis
+proyectos"):** UI de **workspaces** (lista+detalle, crear/editar/eliminar con borrado protegido) y
+**projects** (CRUD), **gestión de miembros** de ambos y **transferencia de propiedad**, con patrón
+lista+detalle, permisos como UX (rol derivado de miembros + `/auth/me`), errores por `code` (i18n),
+confirmaciones y ambos temas. Vista transversal **"Mis proyectos"** (`/projects`) desde
+`GET /api/v1/me/projects` (salida de navegación del guest), **degradación amable del 403** del
+detalle de workspace (enlace a Mis proyectos) y fix de contraste del dropdown de rol. Backend:
+`PATCH`/`DELETE /workspaces/{id}` (borrado **protegido**: `409 workspace_not_empty`, ADR-0011) y
+`GET /api/v1/me/projects` (solo auth). **Sin migración.** Ver `docs/modulos/frontend.md`,
+`docs/modulos/autorizacion.md`, `docs/API-CONTRACT.md`, ADR-0011.
 
-Hecho en Fase 0 (T4b-2): CRUD de projects + membresías + invariantes de servicio (al menos un
-owner, transferencia atómica, guest=viewer, borrado seguro de usuario). Ver ADR-0002/0008.
+Hecho en F0-T5a: envelope de errores `{code,message}` (ADR-0009), CSRF double-submit (ADR-0010),
+cimientos de UI (tema por tokens sin parpadeo, i18n es-MX, cliente HTTP, flujo de auth, tipos
+OpenAPI, proxy de Vite).
 
-**Pendiente:** pantallas de workspaces/projects (F0-T5b); `SameSite=Strict`/endurecimiento CSRF;
-invitación por email; flujo de baja de cuenta; IA/theming por usuario.
+Hecho en Fase 0 (T4b): modelo base + RBAC multiusuario + invariantes de servicio (al menos un
+owner, transferencia atómica, guest=viewer, borrado seguro de usuario). Ver ADR-0002/0006/0008.
+
+**Pendiente (post-Fase 0 / F1+):** invitación por email; borrado de workspace con contenido;
+`SameSite=Strict`; baja de cuenta; code-splitting del bundle; evidencia/hallazgos/documentos e IA.
 
 Hecho en F0-T4b-1: núcleo de autorización (contexto por ruta, rol efectivo, matriz,
 `requiere_permiso`, `WorkspaceScopedRepository`, mapeo de `IntegrityError`) y endpoints mínimos

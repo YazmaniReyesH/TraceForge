@@ -41,3 +41,11 @@ class AlreadyOwnerError(WorkspaceError):
     code = "already_owner"
     status_code = 409
     default_message = "Ese usuario ya es el owner"
+
+
+class WorkspaceNotEmptyError(WorkspaceError):
+    # Borrado protegido (F0-T5b): solo se elimina un workspace sin projects y cuyo único
+    # miembro sea el owner. El borrado "con contenido" (cascada) es una función futura.
+    code = "workspace_not_empty"
+    status_code = 409
+    default_message = "El workspace tiene proyectos o miembros; no se puede eliminar"

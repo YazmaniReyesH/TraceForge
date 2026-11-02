@@ -1,8 +1,10 @@
-// Shell protegido: header (marca, toggle de tema, usuario, logout) + contenido (Outlet).
+// Shell protegido: header (marca, navegación, toggle de tema, usuario, logout) + contenido.
+// Monta <ConfirmDialog/> una vez para las confirmaciones imperativas (acciones destructivas).
 
 import { Button } from "primereact/button";
+import { ConfirmDialog } from "primereact/confirmdialog";
 import { useTranslation } from "react-i18next";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useLogout, useMe } from "../../modules/auth/hooks";
 import { ThemeToggle } from "./ThemeToggle";
@@ -13,15 +15,38 @@ export function AppLayout() {
   const { data: user } = useMe();
   const logout = useLogout();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   const onLogout = () => {
     logout.mutate(undefined, { onSuccess: () => navigate("/login", { replace: true }) });
   };
 
+  // Resaltado EXACTO por sección (no por prefijo amplio):
+  // - "Workspaces": la lista o el detalle de un workspace (/workspaces, /workspaces/:id), NO las
+  //   rutas de project (/workspaces/:id/projects...). Así el detalle de proyecto no marca Workspaces.
+  // - "Mis proyectos": /projects.
+  const isWorkspacesSection = pathname === "/workspaces" || /^\/workspaces\/[^/]+$/.test(pathname);
+  const isMyProjectsSection = pathname === "/projects" || pathname.startsWith("/projects/");
+  const navClass = (active: boolean) =>
+    active ? "tf-nav-link tf-nav-link--active" : "tf-nav-link";
+
   return (
     <div className="tf-shell">
+      <ConfirmDialog />
       <header className="tf-header">
-        <span className="tf-brand">{t("app.name")}</span>
+        <div className="tf-header-left">
+          <Link to="/workspaces" className="tf-brand">
+            {t("app.name")}
+          </Link>
+          <nav className="tf-nav">
+            <Link to="/workspaces" className={navClass(isWorkspacesSection)}>
+              {t("nav.workspaces")}
+            </Link>
+            <Link to="/projects" className={navClass(isMyProjectsSection)}>
+              {t("nav.myProjects")}
+            </Link>
+          </nav>
+        </div>
         <div className="tf-header-actions">
           <ThemeToggle />
           {user ? <span className="tf-user">{user.display_name}</span> : null}
