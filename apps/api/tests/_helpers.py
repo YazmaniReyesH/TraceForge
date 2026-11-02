@@ -23,13 +23,18 @@ from app.models import User, Workspace, WorkspaceMembership
 PW = "Sup3r-Secret-Pw!"
 
 
-async def schema_ready() -> bool:
+async def table_ready(table: str) -> bool:
+    """True si la tabla existe. ``table`` es interno de prueba (no viene del cliente)."""
     try:
         async with app_engine.connect() as conn:
-            await conn.execute(text("SELECT 1 FROM user_credentials LIMIT 1"))
+            await conn.execute(text(f"SELECT 1 FROM {table} LIMIT 1"))
     except Exception:
         return False
     return True
+
+
+async def schema_ready() -> bool:
+    return await table_ready("user_credentials")
 
 
 def unique_email(prefix: str) -> str:
@@ -88,12 +93,18 @@ async def cleanup(emails: list[str]) -> None:
         await s.commit()
 
 
-def run_db_test(scenario: Callable[[], Awaitable[None]]) -> None:
-    """Ejecuta un escenario async contra la BD; omite si falta el esquema; dispone el engine."""
+def run_db_test(scenario: Callable[[], Awaitable[None]], *, requires: str | None = None) -> None:
+    """Ejecuta un escenario async contra la BD; omite si falta el esquema; dispone el engine.
+
+    ``requires`` exige además que exista esa tabla (p. ej. una migración aún no aplicada por el
+    equipo): si falta, la prueba se omite en vez de fallar.
+    """
 
     async def _wrap() -> bool:
         try:
             if not await schema_ready():
+                return False
+            if requires is not None and not await table_ready(requires):
                 return False
             await scenario()
             return True

@@ -40,6 +40,7 @@ documento da el panorama y enlaza a cada uno, sin duplicar su contenido.
 | [0009](./adr/0009-convencion-de-errores-api.md) | Convención de errores de la API (envelope {code, message}) | aceptado |
 | [0010](./adr/0010-csrf-double-submit.md) | Protección CSRF con double-submit token | aceptado |
 | [0011](./adr/0011-edicion-y-borrado-protegido-de-workspace.md) | Edición y borrado protegido de workspace | aceptado |
+| [0012](./adr/0012-evidencia-append-only-y-hashing.md) | Evidencia append-only, versionada y con hash de contenido | aceptado |
 
 Documentos relacionados: [`seguridad-datos.md`](./seguridad-datos.md) (resumen operativo de
 seguridad/redacción; lo gobierna el ADR-0005) y la ficha

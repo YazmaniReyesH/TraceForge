@@ -22,6 +22,7 @@ from app.core.db import database_ready, get_engine
 from app.core.errors import register_exception_handlers
 from app.me.router import router as me_router
 from app.projects.router import router as projects_router
+from app.timeline.router import router as timeline_router
 from app.workspaces.router import router as workspaces_router
 
 
@@ -79,6 +80,7 @@ def create_app() -> FastAPI:
     app.include_router(workspaces_router)
     app.include_router(projects_router)
     app.include_router(me_router)
+    app.include_router(timeline_router)
 
     return app
 
