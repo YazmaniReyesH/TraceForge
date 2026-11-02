@@ -179,8 +179,59 @@ de workspace). No filtran nada que el usuario no pueda ver ya.
 
 ---
 
+## Timeline: sesiones y evidencia — `.../projects/{project_id}/sessions` (F1-T1)
+
+Bitácora cronológica de evidencia dentro de un project. **Append-only y versionada** (ADR-0012):
+"editar" crea una **versión nueva** conservando el historial con su hash; "borrar" es
+**soft-delete**. La evidencia es de **texto** (F1): `kind` `command` (comando + output) o `note`
+(texto libre). Todo cuelga del **gate de proyecto** (acceso y aislamiento ya resueltos por la ruta:
+un `session_id`/`item_id` de otro project ⇒ **404**). Mutaciones exigen **CSRF** (ADR-0010).
+
+- **Permisos:** leer → `projects:read` (viewer+); crear/editar/borrar → `projects:update`
+  (contributor/lead; owner/admin del workspace tienen piso `lead`, ADR-0002).
+- **Hash:** `content_hash` es SHA-256 del contenido canónico (ver ADR-0012); lo calcula el backend,
+  el cliente no lo envía. `tool`/`language` son pistas de presentación y **no** entran en el hash.
+- **Tope:** cada campo de texto ≤ **1 000 000** caracteres (`422` si se excede).
+
+### Sesiones — `.../sessions`
+
+- **POST** `{ "name": "<1..200>" }` — crear sesión. `projects:update`. **201** → `SessionRead`
+  `{ session_id, project_id, name, created_at, updated_at }`.
+- **GET** — listar sesiones vivas del project (orden por `created_at`). `projects:read`. **200** →
+  `[SessionRead]`.
+- **PATCH** `/{session_id}` `{ "name" }` — renombrar. `projects:update`. **200** / **404**.
+- **DELETE** `/{session_id}` — **soft-delete** (marca `deleted_at`; no borra). `projects:update`.
+  **204** / **404**. (La FK a `evidence_items` es `ON DELETE CASCADE` como red del esquema, pero el
+  servicio no borra físicamente.)
+
+### Ítems de evidencia — `.../sessions/{session_id}/items`
+
+- **POST** `{ "kind": "command"|"note", "command_text"?, "command_output"?, "note_text"?, "tool"?, "language"?, "captured_at"? }`
+  — añade un ítem al final (posición consecutiva) y crea su **versión 1**. `projects:update`.
+  **201** → `EvidenceItemRead`. Reglas: `command` exige `command_text`; `note` exige `note_text`
+  (si no → `422`). `captured_at` por defecto = ahora (UTC).
+- **GET** — listar ítems vivos **en orden** (`position`), cada uno con su **versión vigente**
+  (`current`). `projects:read`. **200** → `[EvidenceItemRead]`.
+- **GET** `/{item_id}?include_history=<bool>` — detalle del ítem con su versión vigente; con
+  `include_history=true` agrega `history` (todas las versiones, orden ascendente). `projects:read`.
+  **200** → `EvidenceItemRead` | `EvidenceItemDetailRead`. **404** si no existe / borrado.
+- **PATCH** `/{item_id}` (mismo cuerpo que POST) — **edición = versión NUEVA** (append-only);
+  mueve `current_version` y conserva las anteriores. El `kind` **debe coincidir** con el del ítem
+  (si no → **409** `evidence_kind_mismatch`). `projects:update`. **200** → `EvidenceItemRead`.
+- **DELETE** `/{item_id}` — **soft-delete**. `projects:update`. **204** / **404**.
+
+**Formas de respuesta** (negocio; firmas exactas en OpenAPI):
+- `EvidenceItemRead` = `{ evidence_item_id, session_id, kind, position, current_version, created_by, created_at, current: EvidenceItemVersionRead }`.
+- `EvidenceItemVersionRead` = `{ evidence_item_version_id, version, content_hash, captured_at, command_text, command_output, tool, language, note_text, created_by, created_at }`.
+- `EvidenceItemDetailRead` = `EvidenceItemRead` + `{ history: [EvidenceItemVersionRead] }`.
+
+---
+
 ## Pendiente (próximas tandas)
 
 - **F0-T5:** token anti-CSRF; theming.
+- **F1:** UI del timeline (F1-T2); funciones de IA sobre evidencia con procedencia (F1-T3/T4);
+  evidencia binaria/archivos (almacenamiento de objetos, diferido); hallazgos que referencian
+  **versiones** de evidencia; política de retención/purga de evidencia borrada.
 - **Más adelante:** flujo de baja de cuenta (el invariante de borrado seguro ya está a nivel
   servicio); invitación por email de usuarios nuevos.

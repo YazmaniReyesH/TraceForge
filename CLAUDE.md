@@ -48,12 +48,13 @@ TraceForge/
         core/repository.py   # WorkspaceScopedRepository (filtro por workspace)
         core/integrity.py    # mapeo IntegrityError -> error de dominio (por constraint)
         core/constraints.py  # nombres de constraints centralizados
-        models/              # SQLAlchemy: user, workspace, project, membership, credential, enums, types
+        models/              # SQLAlchemy: user, workspace, project, membership, credential, session, evidence, enums, types
         auth/                # autenticación (F0-T4a): port AuthProvider + local, hashing, tokens, service, router
         workspaces/          # workspaces + membresías e invariantes de owner (F0-T4b): repo, service, router, schemas
         projects/            # CRUD de projects + membresías de proyecto (F0-T4b-2)
+        timeline/            # sesiones + evidencia append-only (F1-T1): hashing, repo, service, router, schemas
         users/               # borrado seguro de usuario (invariante; sin endpoint de baja)
-      migrations/            # Alembic (async); versions/ con migraciones F0-T3b y F0-T4a
+      migrations/            # Alembic (async); versions/ con migraciones F0-T3b, F0-T4a y F1-T1
       tests/
       alembic.ini
       pyproject.toml         # deps + ruff + mypy + pytest
@@ -177,6 +178,15 @@ Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesi
   `[[POR LLENAR: ...]]`, nunca inventarlo.
 
 ## Estado actual
+
+**Fase 1 EN CURSO. F1-T1 (timeline: modelo de evidencia, solo backend):** modelo de **sesiones** e
+**ítems de evidencia** de texto (`command`/`note`) **append-only y versionados** con SHA-256 por
+versión y **soft-delete** (cadena de custodia, ADR-0012); dos tablas (ítem lógico mutable +
+versiones inmutables). CRUD mínimo bajo el gate de proyecto
+(`/api/v1/workspaces/{wid}/projects/{pid}/sessions` + `/items`): leer→`projects:read`,
+escribir→`projects:update`; aislamiento por project; CSRF en mutaciones. **Migración generada, sin
+aplicar** (`58cdba920ffa`, la aplica el equipo). Sin UI ni IA (F1-T2/T3/T4). Ver
+`docs/modulos/timeline.md`, `docs/API-CONTRACT.md`, ADR-0012.
 
 **Fase 0 COMPLETA. F0-T5b (pantallas de dominio + edición/borrado de workspace + "Mis
 proyectos"):** UI de **workspaces** (lista+detalle, crear/editar/eliminar con borrado protegido) y

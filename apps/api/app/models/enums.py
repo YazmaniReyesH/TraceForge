@@ -25,6 +25,13 @@ class ProjectRole(StrEnum):
     VIEWER = "viewer"
 
 
+class EvidenceKind(StrEnum):
+    """Tipos de ítem de evidencia del timeline (F1). Solo texto en F1."""
+
+    COMMAND = "command"  # comando + output
+    NOTE = "note"  # texto libre
+
+
 def sql_in_clause(enum: type[StrEnum]) -> str:
     """Devuelve ``'a', 'b', ...`` con los valores del enum, para un CHECK ``IN``."""
     return ", ".join(repr(member.value) for member in enum)
