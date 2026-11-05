@@ -15,6 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import EvidenceItem, EvidenceItemVersion, Session
 from app.models.enums import EvidenceKind
 
+# Escala de orden con huecos (ADR-0013). El append normal salta de STEP en STEP; insertar "entre
+# dos" toma el punto medio; la base 0 es el borde izquierdo virtual (antes del primer ítem).
+POSITION_STEP = 1000
+POSITION_BASE = 0
+
+# Orden determinista del timeline: por posición y, ante empate, por antigüedad e id (estable).
+_ITEM_ORDER = (EvidenceItem.position, EvidenceItem.created_at, EvidenceItem.evidence_item_id)
+
 
 class TimelineRepository:
     """Acceso a datos de sesiones e ítems de evidencia de un project."""
@@ -49,12 +57,51 @@ class TimelineRepository:
         )
         return (await self._db.execute(stmt)).scalars().all()
 
-    # ── Ítems ──
-    async def next_position(self, session_id: UUID) -> int:
-        stmt = select(func.coalesce(func.max(EvidenceItem.position), -1)).where(
-            EvidenceItem.session_id == session_id
+    # ── Ítems: orden/posición (escala con huecos, ADR-0013) ──
+    async def max_position(self, session_id: UUID) -> int | None:
+        """Mayor posición entre los ítems vivos de la sesión (None si no hay)."""
+        stmt = select(func.max(EvidenceItem.position)).where(
+            EvidenceItem.session_id == session_id, EvidenceItem.deleted_at.is_(None)
         )
-        return int((await self._db.execute(stmt)).scalar_one()) + 1
+        return (await self._db.execute(stmt)).scalar_one_or_none()
+
+    async def next_position(self, session_id: UUID) -> int:
+        """Posición para **añadir al final** (append): último hueco + STEP, o STEP si está vacía."""
+        current_max = await self.max_position(session_id)
+        return POSITION_BASE + POSITION_STEP if current_max is None else current_max + POSITION_STEP
+
+    async def min_position(
+        self, session_id: UUID, *, exclude_item_id: UUID | None = None
+    ) -> int | None:
+        """Menor posición entre los ítems vivos (excluyendo opcionalmente uno que se mueve)."""
+        stmt = select(func.min(EvidenceItem.position)).where(
+            EvidenceItem.session_id == session_id, EvidenceItem.deleted_at.is_(None)
+        )
+        if exclude_item_id is not None:
+            stmt = stmt.where(EvidenceItem.evidence_item_id != exclude_item_id)
+        return (await self._db.execute(stmt)).scalar_one_or_none()
+
+    async def next_higher_position(
+        self, session_id: UUID, position: int, *, exclude_item_id: UUID | None = None
+    ) -> int | None:
+        """Menor posición estrictamente mayor que ``position`` (vecino derecho); None si no hay."""
+        stmt = select(func.min(EvidenceItem.position)).where(
+            EvidenceItem.session_id == session_id,
+            EvidenceItem.deleted_at.is_(None),
+            EvidenceItem.position > position,
+        )
+        if exclude_item_id is not None:
+            stmt = stmt.where(EvidenceItem.evidence_item_id != exclude_item_id)
+        return (await self._db.execute(stmt)).scalar_one_or_none()
+
+    async def items_for_renumber(self, session_id: UUID) -> Sequence[EvidenceItem]:
+        """Ítems vivos de la sesión en orden determinista, para reasignar sus posiciones."""
+        stmt = (
+            select(EvidenceItem)
+            .where(EvidenceItem.session_id == session_id, EvidenceItem.deleted_at.is_(None))
+            .order_by(*_ITEM_ORDER)
+        )
+        return (await self._db.execute(stmt)).scalars().all()
 
     def add_item(
         self, *, session_id: UUID, kind: EvidenceKind, position: int, created_by: UUID
@@ -120,7 +167,7 @@ class TimelineRepository:
                 & (EvidenceItemVersion.version == EvidenceItem.current_version),
             )
             .where(EvidenceItem.session_id == session_id, EvidenceItem.deleted_at.is_(None))
-            .order_by(EvidenceItem.position)
+            .order_by(*_ITEM_ORDER)
         )
         return (await self._db.execute(stmt)).all()
 

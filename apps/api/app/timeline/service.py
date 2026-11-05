@@ -9,7 +9,7 @@ from app.core.errors import NotFoundError
 from app.models import EvidenceItem, EvidenceItemVersion, Session
 from app.timeline.errors import EvidenceKindMismatchError
 from app.timeline.hashing import compute_content_hash
-from app.timeline.repository import TimelineRepository
+from app.timeline.repository import POSITION_BASE, POSITION_STEP, TimelineRepository
 from app.timeline.schemas import (
     EvidenceItemCreate,
     EvidenceItemDetailRead,
@@ -68,9 +68,18 @@ class TimelineService:
         await self._db.commit()
 
     # ── Ítems de evidencia ──
-    async def add_item(self, *, session_id: UUID, data: EvidenceItemCreate) -> EvidenceItemRead:
+    async def add_item(
+        self, *, session_id: UUID, data: EvidenceItemCreate, after_item_id: UUID | None = None
+    ) -> EvidenceItemRead:
+        """Crea un ítem (versión 1). Por defecto lo **añade al final**; con ``after_item_id`` lo
+        **inserta** justo después de ese ítem (escala con huecos, ADR-0013)."""
         await self._require_session(session_id)
-        position = await self._repo.next_position(session_id)
+        if after_item_id is None:
+            position = await self._repo.next_position(
+                session_id
+            )  # append simple (caso por defecto)
+        else:
+            position = await self._insert_position(session_id, after_item_id)
         item = self._repo.add_item(
             session_id=session_id, kind=data.kind, position=position, created_by=self._user_id
         )
@@ -139,6 +148,85 @@ class TimelineService:
         item = await self._require_item(session_id, item_id)
         item.deleted_at = datetime.now(UTC)  # soft-delete
         await self._db.commit()
+
+    async def move_item(
+        self, *, session_id: UUID, item_id: UUID, after_item_id: UUID | None
+    ) -> EvidenceItemRead:
+        """Reordena un ítem: lo coloca después de ``after_item_id`` (``None`` = al inicio).
+
+        Solo cambia la **posición** (metadato de orden): no crea versión ni toca el contenido/hash
+        (append-only intacto, ADR-0012). Para mover al final, el cliente pasa el id del último ítem.
+        """
+        await self._require_session(session_id)
+        item = await self._require_item(session_id, item_id)
+        if after_item_id == item_id:
+            # Mover un ítem después de sí mismo: no-op (evita calcular un hueco degenerado).
+            current = await self._require_version(item.evidence_item_id, item.current_version)
+            return _item_read(item, current)
+        item.position = await self._insert_position(
+            session_id, after_item_id, exclude_item_id=item_id
+        )
+        await self._db.commit()
+        current = await self._require_version(item.evidence_item_id, item.current_version)
+        return _item_read(item, current)
+
+    # ── Orden con huecos (ADR-0013) ──
+    async def _insert_position(
+        self, session_id: UUID, after_item_id: UUID | None, *, exclude_item_id: UUID | None = None
+    ) -> int:
+        """Calcula la posición para colocar un ítem **justo después** de ``after_item_id``.
+
+        ``after_item_id=None`` => al inicio. Si no cabe un intermedio entre los vecinos (huecos
+        agotados en esa zona), **renumera** la sesión en escala limpia y recalcula (siempre cabe).
+        """
+        left, right = await self._bounds(session_id, after_item_id, exclude_item_id)
+        position = self._midpoint(left, right)
+        if position is None:
+            await self._renumber(session_id)
+            left, right = await self._bounds(session_id, after_item_id, exclude_item_id)
+            position = self._midpoint(left, right)
+            if position is None:  # defensivo: tras renumerar el hueco es STEP, siempre cabe
+                raise RuntimeError("No se pudo asignar posición tras renumerar")
+        return position
+
+    async def _bounds(
+        self, session_id: UUID, after_item_id: UUID | None, exclude_item_id: UUID | None
+    ) -> tuple[int, int | None]:
+        """Posiciones (izquierda, derecha) entre las que cae el ítem; derecha None = al final."""
+        if after_item_id is None:
+            left = POSITION_BASE
+            right = await self._repo.min_position(session_id, exclude_item_id=exclude_item_id)
+        else:
+            anchor = await self._require_item(session_id, after_item_id)
+            left = anchor.position
+            right = await self._repo.next_higher_position(
+                session_id, anchor.position, exclude_item_id=exclude_item_id
+            )
+        return left, right
+
+    @staticmethod
+    def _midpoint(left: int, right: int | None) -> int | None:
+        """Entero estrictamente entre ``left`` y ``right``; None si no cabe (hay que renumerar)."""
+        if right is None:
+            return left + POSITION_STEP  # al final de la zona
+        if right - left >= 2:
+            return (left + right) // 2
+        return None
+
+    async def _renumber(self, session_id: UUID) -> None:
+        """Reasigna posiciones en escala limpia (STEP, 2·STEP, …) conservando el orden actual.
+
+        En **dos fases** (primero a un rango negativo disjunto, luego al final) para no provocar
+        colisiones transitorias si todavía existiera un UNIQUE sobre (session_id, position): los
+        UPDATE por fila nunca chocan entre un valor ya asignado y otro pendiente.
+        """
+        items = await self._repo.items_for_renumber(session_id)
+        for idx, item in enumerate(items, start=1):
+            item.position = -idx * POSITION_STEP  # fase 1: rango negativo (disjunto del final)
+        await self._repo.flush()
+        for idx, item in enumerate(items, start=1):
+            item.position = idx * POSITION_STEP  # fase 2: escala final limpia
+        await self._repo.flush()
 
     # ── Helpers ──
     @staticmethod

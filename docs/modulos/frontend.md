@@ -1,9 +1,9 @@
 # Ficha de módulo: frontend (cimientos de UI)
 
-- **Fase / tanda:** F0-T5a (cimientos) + F0-T5b (pantallas de dominio)
-- **Estado del módulo:** cimientos de UI + pantallas de workspaces/projects/membresías. Cierra la
-  Fase 0 en frontend.
-- **Última actualización:** 2026-10-23
+- **Fase / tanda:** F0-T5a (cimientos) + F0-T5b (pantallas de dominio) + F1-T2 (timeline)
+- **Estado del módulo:** cimientos de UI + pantallas de workspaces/projects/membresías + **timeline
+  de evidencia** (captura, reorden por arrastre, historial) con resaltado de sintaxis lazy.
+- **Última actualización:** 2026-11-05
 
 ## Propósito
 
@@ -30,8 +30,14 @@ src/
     ui/     AppLayout, ThemeToggle, PageLoader, layout.css
   modules/
     auth/   api.ts, hooks.ts, types.ts, components/ProtectedRoute, pages/Login, pages/Register
-    home/   pages/HomePage (placeholder post-login)
+    workspaces/ · projects/ · me/   # pantallas de dominio (F0-T5b)
+    timeline/   api.ts, hooks.ts, types.ts, timeline.css, components/, pages/TimelinePage (F1-T2)
 ```
+
+> **Code-splitting (F1-T2):** las páginas se cargan con `React.lazy` + `Suspense` (cada pantalla y
+> su parte de PrimeReact viajan en chunks aparte). El resaltador de sintaxis (Prism) y sus
+> gramáticas se cargan con `import()` dinámico solo al pintar el primer comando. Resultado: el
+> chunk principal bajó de **~780 kB → ~427 kB** y desapareció el aviso de Vite de chunk > 500 kB.
 
 ## Tema claro/oscuro
 
@@ -110,16 +116,74 @@ src/
   solo en `/workspaces` y `/workspaces/:id`; "Mis proyectos" en `/projects`; el detalle de
   proyecto (`/workspaces/:id/projects/:pid`) no marca ningún menú que no corresponda.
 
+## Timeline de evidencia (F1-T2)
+
+- **`modules/timeline`** (espeja el backend: `types.ts` desde OpenAPI, `api.ts`, `hooks.ts`,
+  `components/`, `pages/TimelinePage`). Ruta dentro del project:
+  `/workspaces/:wid/projects/:pid/timeline[/:sessionId]`; entrada desde el detalle del project.
+- **Pantalla:** lista/selector de **sesiones** (crear, renombrar, soft-delete con confirmación) +
+  **timeline** de la sesión activa (auto-selecciona la primera). Estados de carga (skeletons con la
+  forma del riel), error y vacío.
+- **Dirección visual (consola de operador, "cyber" dosificado):** riel cronológico con glow teal
+  (tenue; sobre todo en oscuro), **nodo activo** (el más reciente) con halo; **bloque de comando**
+  tipo terminal (prompt `$` en teal, barra de acento a la izquierda, resaltado de sintaxis, output
+  distinguible y **colapsable**, **copiar** en hover); **nota** con identidad propia (Inter, acento
+  lateral e icono); **metadatos** en monoespaciada como telemetría (hora, hash corto, versión);
+  microinteracción **scanline** (~300 ms, una vez) al capturar; feedback de "copiado". **Regla de
+  contención:** glow/animaciones en acentos y sobre todo en oscuro; en claro, atenuado; nada de
+  efectos sobre texto de lectura larga; **`prefers-reduced-motion`** desactiva animaciones. El
+  violeta de IA **no** aparece (reservado a F1-T4).
+- **Layout de dos columnas (aprovecha el ancho):** la pantalla **sangra** fuera del contenedor de
+  960px del shell (`.tf-tl-page`: `width: min(1360px,94vw)` centrada) para usar el ancho disponible.
+  **Sidebar** de sesiones **sticky** (persistente al hacer scroll, más ancho = 280px) + **columna
+  principal** amplia con `minmax(0,1fr)` (los outputs no desbordan). Los bloques de comando/salida
+  (mono) usan el ancho amplio; las **notas** se limitan a ~82ch para lectura cómoda. Responsive: a
+  ≤980px se desactiva la sangría; a ≤860px una sola columna con el sidebar arriba (no sticky).
+- **Captura ágil (barra compacta):** barra **sticky** inferior, **sólida** y la columna reserva
+  `padding-bottom` para que no tape el último ítem. El fondo usa un token **opaco literal**
+  `--capture-bg` (`#ffffff`/`#111826`), **no** `--surface-card`: el puente de PrimeReact define
+  `--surface-card: var(--surface-card)` (cíclico → el valor queda inválido → `transparent`), lo que
+  transparentaba la barra sobre el timeline (visible sobre todo en oscuro); con el token literal el
+  fondo es 100% opaco. Sombra superior marcada (`--capture-shadow`) + línea de acento la despegan. En **reposo** solo muestra **"+ Comando / + Nota"**; al pulsar **expande** el
+  formulario con ese tipo; tras guardar sigue abierta (captura en serie) y se limpia; "Cancelar" la
+  pliega. El nodo nuevo entra con scanline. Validación/errores por `code`.
+- **Reordenar/insertar por arrastre:** HTML5 drag-and-drop; soltar en la mitad superior/inferior de
+  un nodo inserta antes/después (→ `after_item_id`); estado **optimista** con reconciliación (si el
+  backend falla, revierte y muestra el error). Viewer **no** ve controles de edición/orden.
+- **Copiar por sección:** botones independientes (hover + feedback "copiado") en **comando**,
+  **salida** (dos botones en el bloque de comando) y **nota**.
+- **Historial:** marcador "editado · ver historial" (si `version > 1`) abre el rastro de versiones
+  con su **hash corto** en un modal holgado (`min(860px,96vw)`, alto hasta 72vh, más aire por
+  versión); "editar" crea versión nueva (backend append-only).
+- **Borrado de sesión sin fantasma:** al borrar la sesión activa, reposiciona en la **anterior**
+  existente (o la siguiente, o el estado vacío si no queda ninguna); los nombres no se cortan
+  (sidebar más ancho + elipsis con **tooltip** para los muy largos).
+- **Realce semántico de entidades (determinista, NO IA):** además del resaltado de lenguaje de
+  Prism, una capa por **regex** realza entidades de seguridad **en comando y salida**, tomando cada
+  una como **unidad** (p. ej. la IP completa, que Prism partiría). Entidades y tokens `--sem-*`:
+  IPv4/IPv6 (`--sem-ip`), puerto `N/tcp|udp|sctp` (`--sem-port`), estados open/closed/filtered
+  (`--sem-state-*`), `CVE-AAAA-N` (`--sem-cve`), hashes md5/sha1/sha256 por longitud hex
+  (`--sem-hash`), rutas absolutas (`--sem-path`). **Convive con Prism** porque el texto se parte en
+  `[entidad | resto]`: la entidad se envuelve aquí y Prism resalta solo el "resto" (ver detalle y
+  patrones en [`timeline.md`](./timeline.md)). Síncrono (sin lazy) para la salida; para el comando se
+  pinta semántico al instante y se **mejora** con Prism al cargar. Peso 600 como pista secundaria
+  (el color no es el único indicador). Fallback a texto plano intacto.
+- **Tokens nuevos** (en `tokens.css`): superficie/borde de terminal (`--term-*`), glow/halo/scanline
+  del timeline, paleta de **sintaxis** (`--code-*`) y de **realce semántico** (`--sem-*`) por tema —
+  nada de colores a mano ni violeta de IA. **Resaltado de sintaxis:** **Prism** (ADR-0014) lazy.
+
 ## Verificación manual
 
 1. `task up` · `task dev-api` · `task dev-web`; abrir http://localhost:5173.
 2. Registrarse → entra a Inicio; recargar → sigue logueado; alternar tema (sin parpadeo, ambos
    correctos); cerrar sesión → vuelve a login; borrar cookies y pedir una ruta protegida → 401 → login.
+3. **Timeline:** abrir un project → "Abrir timeline"; crear sesión; capturar un comando (con tool/
+   language → resaltado) y una nota; colapsar/expandir output; copiar; reordenar por arrastre;
+   insertar entre dos; editar (ver "editado" + historial con hash); ambos temas; `prefers-reduced-motion`.
 
 ## Pendiente / `[[POR LLENAR]]`
 
 - Invitación de usuarios nuevos por email (hoy "añadir miembro" opera sobre usuarios existentes).
-- Code-splitting del bundle (PrimeReact hace el chunk > 500 kB; aviso informativo de Vite).
 - `SameSite=Strict` / endurecimiento CSRF según despliegue (ADR-0010).
 - Persistencia de tema por usuario en backend (diferida; no tocar `users`).
-- Pantallas de evidencia/hallazgos/documentos y funciones de IA (F1+).
+- Pantallas de hallazgos/documentos y funciones de IA (F1-T3/T4); el violeta `--ai` entra ahí.

@@ -41,6 +41,8 @@ documento da el panorama y enlaza a cada uno, sin duplicar su contenido.
 | [0010](./adr/0010-csrf-double-submit.md) | Protección CSRF con double-submit token | aceptado |
 | [0011](./adr/0011-edicion-y-borrado-protegido-de-workspace.md) | Edición y borrado protegido de workspace | aceptado |
 | [0012](./adr/0012-evidencia-append-only-y-hashing.md) | Evidencia append-only, versionada y con hash de contenido | aceptado |
+| [0013](./adr/0013-orden-del-timeline-con-posiciones-espaciadas.md) | Orden del timeline con posiciones espaciadas (huecos) e índice no único | aceptado |
+| [0014](./adr/0014-resaltado-de-sintaxis-y-code-splitting.md) | Resaltado de sintaxis (Prism, lazy) y code-splitting del frontend | aceptado |
 
 Documentos relacionados: [`seguridad-datos.md`](./seguridad-datos.md) (resumen operativo de
 seguridad/redacción; lo gobierna el ADR-0005) y la ficha

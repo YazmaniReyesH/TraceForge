@@ -47,6 +47,9 @@ class EvidenceItemCreate(BaseModel):
     language: str | None = Field(default=None, max_length=50)
     note_text: str | None = Field(default=None, max_length=TEXT_MAX)
     captured_at: datetime | None = None  # por defecto, ahora()
+    # Inserción (solo en ALTA; se ignora al editar): None => añade al final; un id => inserta
+    # justo después de ese ítem (escala con huecos, ADR-0013).
+    after_item_id: UUID | None = None
 
     @model_validator(mode="after")
     def _require_content(self) -> "EvidenceItemCreate":
@@ -56,6 +59,14 @@ class EvidenceItemCreate(BaseModel):
         elif not self.note_text:
             raise ValueError("note_text es requerido para kind=note")
         return self
+
+
+class EvidenceItemMove(BaseModel):
+    """Reordenamiento de un ítem: a dónde moverlo (solo cambia el orden, no el contenido)."""
+
+    # None => al inicio (antes de todos); un id => justo después de ese ítem.
+    # Para mover al final, el cliente pasa el id del último ítem.
+    after_item_id: UUID | None
 
 
 class EvidenceItemVersionRead(BaseModel):

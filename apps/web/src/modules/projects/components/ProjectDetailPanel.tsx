@@ -6,6 +6,7 @@ import { confirmDialog } from "primereact/confirmdialog";
 import { InputText } from "primereact/inputtext";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
 import { PageLoader } from "../../../shared/ui/PageLoader";
 import { ErrorState, InlineError } from "../../../shared/ui/states";
@@ -27,6 +28,7 @@ export function ProjectDetailPanel({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const projectQuery = useProject(workspaceId, projectId);
   const effectiveRole = useMyEffectiveProjectRole(workspaceId, projectId);
   const update = useUpdateProject(workspaceId, projectId);
@@ -109,6 +111,14 @@ export function ProjectDetailPanel({
           {t("projects.classification")}:{" "}
           {project.classification ?? t("projects.classificationReserved")}
         </p>
+        <div className="tf-detail-actions" style={{ marginTop: "var(--space-3)" }}>
+          <Button
+            outlined
+            icon="pi pi-clock"
+            label={t("timeline.open")}
+            onClick={() => navigate(`/workspaces/${workspaceId}/projects/${projectId}/timeline`)}
+          />
+        </div>
       </div>
 
       {canDelete ? (

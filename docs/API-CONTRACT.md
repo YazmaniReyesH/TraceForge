@@ -206,18 +206,26 @@ un `session_id`/`item_id` de otro project ⇒ **404**). Mutaciones exigen **CSRF
 
 ### Ítems de evidencia — `.../sessions/{session_id}/items`
 
-- **POST** `{ "kind": "command"|"note", "command_text"?, "command_output"?, "note_text"?, "tool"?, "language"?, "captured_at"? }`
-  — añade un ítem al final (posición consecutiva) y crea su **versión 1**. `projects:update`.
-  **201** → `EvidenceItemRead`. Reglas: `command` exige `command_text`; `note` exige `note_text`
-  (si no → `422`). `captured_at` por defecto = ahora (UTC).
+- **POST** `{ "kind": "command"|"note", "command_text"?, "command_output"?, "note_text"?, "tool"?, "language"?, "captured_at"?, "after_item_id"? }`
+  — añade un ítem y crea su **versión 1**. `projects:update`. **201** → `EvidenceItemRead`. Reglas:
+  `command` exige `command_text`; `note` exige `note_text` (si no → `422`). `captured_at` por
+  defecto = ahora (UTC). **Orden (ADR-0013):** sin `after_item_id` (o `null`) **añade al final**
+  (caso por defecto); con `after_item_id = <id>` **inserta justo después** de ese ítem (posiciones
+  con huecos; renumeración automática si se agota el hueco). El cliente nunca envía `position`.
 - **GET** — listar ítems vivos **en orden** (`position`), cada uno con su **versión vigente**
   (`current`). `projects:read`. **200** → `[EvidenceItemRead]`.
 - **GET** `/{item_id}?include_history=<bool>` — detalle del ítem con su versión vigente; con
   `include_history=true` agrega `history` (todas las versiones, orden ascendente). `projects:read`.
   **200** → `EvidenceItemRead` | `EvidenceItemDetailRead`. **404** si no existe / borrado.
-- **PATCH** `/{item_id}` (mismo cuerpo que POST) — **edición = versión NUEVA** (append-only);
-  mueve `current_version` y conserva las anteriores. El `kind` **debe coincidir** con el del ítem
-  (si no → **409** `evidence_kind_mismatch`). `projects:update`. **200** → `EvidenceItemRead`.
+- **PATCH** `/{item_id}` (mismo cuerpo que POST; `after_item_id` **se ignora** aquí) — **edición =
+  versión NUEVA** (append-only); mueve `current_version` y conserva las anteriores. El `kind`
+  **debe coincidir** con el del ítem (si no → **409** `evidence_kind_mismatch`). `projects:update`.
+  **200** → `EvidenceItemRead`.
+- **PATCH** `/{item_id}/move` `{ "after_item_id": <uuid>|null }` — **reordena** el ítem (ADR-0013):
+  `null` = al inicio; un id = justo después de ese ítem; al final = id del último. **Solo cambia el
+  orden**: no crea versión ni altera el `content_hash` (append-only intacto). `projects:update`.
+  **200** → `EvidenceItemRead`. **404** si el ítem o el `after_item_id` no existen en la sesión
+  (aislamiento). Mover un ítem después de sí mismo es no-op.
 - **DELETE** `/{item_id}` — **soft-delete**. `projects:update`. **204** / **404**.
 
 **Formas de respuesta** (negocio; firmas exactas en OpenAPI):

@@ -58,6 +58,40 @@
   /* Sombras (sutiles) */
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
   --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+
+  /* Timeline / consola de operador (CLARO: limpio y técnico, glow atenuado) */
+  --term-bg: #f1f5f9; /* superficie del bloque de comando */
+  --term-border: #dbe3ec;
+  --rail-line: var(--border); /* riel cronológico */
+  --timeline-glow: none; /* glow del riel: desactivado en claro */
+  --node-halo: 0 0 0 3px rgba(14, 154, 163, 0.14); /* halo del nodo activo (tenue) */
+  --scanline: rgba(14, 154, 163, 0.1); /* barrido breve al capturar */
+  /* Barra de captura: color 100% OPACO literal (sin var ni alfa) para que nunca transparente el
+     contenido del timeline por detrás; sombra superior marcada que la despega al hacer scroll. */
+  --capture-bg: #ffffff;
+  --capture-shadow: 0 -8px 20px rgba(15, 23, 42, 0.16), 0 -1px 0 var(--border);
+
+  /* Sintaxis (código): paleta propia por tokens, legible sobre --term-bg. NO usa el violeta de IA. */
+  --code-text: #0f172a;
+  --code-comment: #64748b;
+  --code-punctuation: #475569;
+  --code-keyword: #0369a1;
+  --code-string: #0f766e;
+  --code-number: #b45309;
+  --code-function: #be185d;
+  --code-operator: #475569;
+  --code-builtin: #9a3412;
+  --code-variable: #0f172a;
+
+  /* Realce semántico de entidades de seguridad (regex determinista; NO IA, NO violeta). CLARO. */
+  --sem-ip: #0b7285; /* IPv4/IPv6 */
+  --sem-port: #9c6a00; /* 22/tcp */
+  --sem-cve: #b02a37; /* CVE-AAAA-N */
+  --sem-hash: #a61e4d; /* md5/sha1/sha256 */
+  --sem-path: #495057; /* rutas de archivo */
+  --sem-state-open: #2b8a3e; /* open */
+  --sem-state-closed: #868e96; /* closed */
+  --sem-state-filtered: #e8590c; /* filtered */
 }
 
 .theme-dark {
@@ -93,6 +127,39 @@
   /* En oscuro, borde luminoso tenue en vez de sombra marcada */
   --shadow-sm: 0 0 0 1px rgba(44, 230, 239, 0.04);
   --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.45);
+
+  /* Timeline / consola de operador (OSCURO: aquí viven el glow teal y los halos) */
+  --term-bg: #0b1220;
+  --term-border: #1d2a40;
+  --rail-line: #1f3346; /* riel con tinte teal */
+  --timeline-glow: 0 0 12px rgba(34, 211, 219, 0.22); /* glow teal del riel */
+  --node-halo: 0 0 0 4px rgba(34, 211, 219, 0.16); /* halo del nodo activo */
+  --scanline: rgba(34, 211, 219, 0.16);
+  /* Barra de captura (OSCURO): opaca literal + sombra superior fuerte (se despega del timeline). */
+  --capture-bg: #111826;
+  --capture-shadow: 0 -10px 26px rgba(0, 0, 0, 0.72), 0 -1px 0 var(--border);
+
+  /* Sintaxis (oscuro): legible sobre --term-bg oscuro. Sin violeta (reservado a IA). */
+  --code-text: #e6edf3;
+  --code-comment: #7e8ca0;
+  --code-punctuation: #9aa7b8;
+  --code-keyword: #38bdf8;
+  --code-string: #34d399;
+  --code-number: #fbbf24;
+  --code-function: #f472b6;
+  --code-operator: #9aa7b8;
+  --code-builtin: #fb923c;
+  --code-variable: #e6edf3;
+
+  /* Realce semántico (OSCURO): contraste sobre --term-bg oscuro. */
+  --sem-ip: #3bc9db;
+  --sem-port: #ffd43b;
+  --sem-cve: #ff6b6b;
+  --sem-hash: #f783ac;
+  --sem-path: #adb5bd;
+  --sem-state-open: #69db7c;
+  --sem-state-closed: #909aa6;
+  --sem-state-filtered: #ffa94d;
 }
 
 /* Reset mínimo + base de la app (ambos temas) */

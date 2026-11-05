@@ -1,0 +1,734 @@
+/*
+ * Timeline de evidencia — estilo "consola de operador" con cyber dosificado.
+ * SOLO tokens (ver shared/theme/tokens.css). Regla de contención: glow/animaciones viven en
+ * acentos y sobre todo en OSCURO (tokens --timeline-glow/--node-halo/--scanline ya atenúan el
+ * claro). Nada de efectos sobre texto de lectura larga. Respeta prefers-reduced-motion.
+ */
+
+/* ── Layout: aprovecha el ancho (sangra fuera del contenedor de 960px del shell) ── */
+.tf-tl-page {
+  width: min(1360px, 94vw);
+  margin-left: 50%;
+  transform: translateX(-50%); /* centra en el viewport sin provocar scroll horizontal */
+}
+
+.tf-tl-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr); /* minmax(0,…): el output ancho no desborda */
+  gap: var(--space-5);
+  align-items: start;
+}
+
+/* Columna principal: reserva aire inferior para que la barra de captura no tape el último ítem. */
+.tf-tl-main {
+  min-width: 0;
+  padding-bottom: var(--space-7);
+}
+
+/* Pantallas angostas: una sola columna; el sidebar pasa arriba y deja de ser sticky. */
+@media (max-width: 980px) {
+  .tf-tl-page {
+    width: 100%;
+    margin-left: 0;
+    transform: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .tf-tl-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Lista de sesiones (sidebar persistente durante el scroll) ── */
+.tf-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  padding: var(--space-3);
+  position: sticky;
+  top: var(--space-4);
+  align-self: start;
+  max-height: calc(100vh - var(--space-7));
+  overflow-y: auto;
+}
+
+@media (max-width: 860px) {
+  .tf-sessions {
+    position: static;
+    max-height: none;
+  }
+}
+
+.tf-sessions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.tf-sessions-head h2 {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.tf-session-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-2);
+}
+
+.tf-session-item:hover {
+  background: var(--surface-raised);
+}
+
+.tf-session-item--active {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+}
+
+.tf-session-item__btn {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: var(--space-2) var(--space-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tf-session-item--active .tf-session-item__btn {
+  color: var(--text-strong);
+  font-weight: 500;
+}
+
+.tf-session-actions {
+  display: inline-flex;
+  gap: 0;
+  opacity: 0;
+}
+
+.tf-session-item:hover .tf-session-actions,
+.tf-session-item--active .tf-session-actions,
+.tf-session-item:focus-within .tf-session-actions {
+  opacity: 1;
+}
+
+/* ── Riel cronológico ── */
+.tf-rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-left: var(--space-6);
+}
+
+/* La línea vertical del riel, con glow teal (sobre todo en oscuro vía --timeline-glow). */
+.tf-rail::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--rail-line);
+  box-shadow: var(--timeline-glow);
+  border-radius: 2px;
+}
+
+/* ── Nodo ── */
+.tf-node {
+  position: relative;
+}
+
+.tf-node__dot {
+  position: absolute;
+  left: calc(-1 * var(--space-6) + 5px);
+  top: 6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface-card);
+  border: 2px solid var(--rail-line);
+  z-index: 1;
+}
+
+.tf-node--active .tf-node__dot {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: var(--node-halo);
+}
+
+.tf-node__card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  overflow: hidden;
+}
+
+.tf-node--dragging {
+  opacity: 0.5;
+}
+
+/* Indicador de inserción al arrastrar (línea de acento arriba/abajo del nodo objetivo). */
+.tf-node--drop-before::after,
+.tf-node--drop-after::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  box-shadow: var(--timeline-glow);
+  z-index: 2;
+}
+
+.tf-node--drop-before::after {
+  top: -9px;
+}
+
+.tf-node--drop-after::after {
+  bottom: -9px;
+}
+
+/* ── Bloque de comando (terminal) ── */
+.tf-cmd {
+  border-left: 3px solid var(--accent);
+}
+
+.tf-cmd__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.tf-cmd__tool {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tf-cmd__spacer {
+  flex: 1;
+}
+
+/* Botón copiar: aparece en hover/focus del nodo (accesible por teclado vía focus-within). */
+.tf-copy {
+  opacity: 0;
+  transition: opacity 120ms ease;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+}
+
+.tf-node__card:hover .tf-copy,
+.tf-node__card:focus-within .tf-copy {
+  opacity: 1;
+}
+
+.tf-copy:hover {
+  color: var(--accent);
+}
+
+.tf-copy--done {
+  opacity: 1;
+  color: var(--success);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-copy {
+    transition: none;
+  }
+}
+
+.tf-cmd__body {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--term-bg);
+  overflow-x: auto;
+}
+
+.tf-cmd__prompt {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  user-select: none;
+}
+
+/* Cabecera de la salida: etiqueta "salida" + copiar (independiente del copiar del comando). */
+.tf-cmd__outhead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--term-bg);
+  border-top: 1px dashed var(--term-border);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.tf-cmd__outlabel {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.tf-cmd__output {
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--term-bg);
+  color: var(--code-text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.tf-cmd__output--clamped {
+  max-height: 10.5rem;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Desvanecido inferior para indicar que hay más output colapsado. */
+.tf-cmd__output--clamped::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.5rem;
+  background: linear-gradient(to bottom, transparent, var(--term-bg));
+}
+
+.tf-cmd__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-2) var(--space-3);
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+}
+
+/* Código (comando/salida resaltados). Monoespaciada; el fondo lo pone el contenedor. */
+.tf-code {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--code-text);
+  background: transparent;
+}
+
+/* ── Nota (identidad propia: Inter, acento lateral distinto, icono) ── */
+.tf-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--text-muted);
+}
+
+.tf-note__icon {
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.tf-note__text {
+  margin: 0;
+  flex: 1;
+  max-width: 82ch; /* ancho de lectura cómodo aunque la columna sea ancha */
+  font-family: var(--font-ui);
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Telemetría (metadatos en monoespaciada) ── */
+.tf-telemetry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+  background: var(--surface-card);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.tf-telemetry__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.tf-telemetry__hash {
+  color: var(--text);
+}
+
+.tf-telemetry__edited {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.tf-telemetry__spacer {
+  flex: 1;
+}
+
+.tf-node__actions {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.tf-drag-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  padding: var(--space-1);
+}
+
+.tf-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* ── Barra de captura (siempre accesible, sólida y elevada; variante compacta) ── */
+.tf-capture {
+  position: sticky;
+  bottom: var(--space-4);
+  z-index: 3;
+  margin-top: var(--space-5);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--accent); /* línea de acento: la separa del timeline */
+  border-radius: var(--radius-md);
+  /* Fondo 100% OPACO por token literal (NO usa --surface-card, que el puente de PrimeReact deja
+     cíclico → transparente). Sombra superior marcada para despegarla del contenido al hacer scroll. */
+  background-color: var(--capture-bg);
+  opacity: 1;
+  box-shadow: var(--capture-shadow);
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* En reposo (compacta): solo los botones "+ Comando / + Nota". */
+.tf-capture--collapsed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tf-capture__hint {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.tf-capture__spacer {
+  flex: 1;
+}
+
+.tf-capture__kinds {
+  display: inline-flex;
+  gap: var(--space-1);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  width: fit-content;
+}
+
+.tf-capture__kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: calc(var(--radius-sm) - 2px);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.tf-capture__kind--active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.tf-capture__row {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.tf-capture__inline {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.tf-capture__inline > * {
+  flex: 1 1 140px;
+}
+
+.tf-capture__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.tf-mono-input .p-inputtext,
+.tf-mono-input.p-inputtext,
+textarea.tf-mono-input {
+  font-family: var(--font-mono);
+}
+
+/* ── Microinteracción: barrido (scanline) breve al añadir un nodo, una sola vez ── */
+@keyframes tf-scan {
+  0% {
+    background-position: 0 -100%;
+  }
+  100% {
+    background-position: 0 200%;
+  }
+}
+
+.tf-node--new .tf-node__card {
+  animation: tf-scan 300ms ease-out 1;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--scanline) 50%,
+    transparent 100%
+  );
+  background-size: 100% 60%;
+  background-repeat: no-repeat;
+}
+
+/* ── Skeletons (respetan la forma del timeline) ── */
+.tf-skel {
+  margin: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--surface-raised) 25%,
+    var(--border) 37%,
+    var(--surface-raised) 63%
+  );
+  background-size: 400% 100%;
+  animation: tf-shimmer 1.4s ease infinite;
+}
+
+@keyframes tf-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tf-skel {
+    animation: none;
+  }
+}
+
+/* ── Historial de versiones ── */
+.tf-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.tf-history__item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background: var(--surface-card);
+}
+
+.tf-history__item--current {
+  border-color: var(--accent);
+}
+
+.tf-history__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.tf-history__ver {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.tf-history__badge {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+  font-size: 0.68rem;
+}
+
+.tf-history__spacer {
+  flex: 1;
+}
+
+.tf-history__date {
+  margin-top: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.tf-history__preview {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
+  background: var(--term-bg);
+  border-radius: var(--radius-sm);
+  color: var(--code-text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 18rem;
+  overflow: auto;
+}
+
+/* Prism: los COLORES de los tokens salen de nuestros --code-*. */
+.tf-code .token.comment,
+.tf-code .token.prolog,
+.tf-code .token.doctype,
+.tf-code .token.cdata {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.tf-code .token.punctuation {
+  color: var(--code-punctuation);
+}
+.tf-code .token.keyword,
+.tf-code .token.rule,
+.tf-code .token.important,
+.tf-code .token.atrule {
+  color: var(--code-keyword);
+}
+.tf-code .token.string,
+.tf-code .token.char,
+.tf-code .token.attr-value,
+.tf-code .token.regex {
+  color: var(--code-string);
+}
+.tf-code .token.number,
+.tf-code .token.boolean,
+.tf-code .token.constant {
+  color: var(--code-number);
+}
+.tf-code .token.function,
+.tf-code .token.class-name {
+  color: var(--code-function);
+}
+.tf-code .token.operator,
+.tf-code .token.entity,
+.tf-code .token.url {
+  color: var(--code-operator);
+}
+.tf-code .token.builtin,
+.tf-code .token.property,
+.tf-code .token.tag,
+.tf-code .token.symbol {
+  color: var(--code-builtin);
+}
+.tf-code .token.variable,
+.tf-code .token.attr-name {
+  color: var(--code-variable);
+}
+
+/*
+ * Realce semántico de entidades de seguridad (capa determinista; ver semantic.ts). Colores por
+ * tokens --sem-*. El peso (600) es una pista secundaria para no depender solo del color.
+ */
+.sem {
+  font-weight: 600;
+}
+.sem-ip {
+  color: var(--sem-ip);
+}
+.sem-port {
+  color: var(--sem-port);
+}
+.sem-cve {
+  color: var(--sem-cve);
+}
+.sem-hash {
+  color: var(--sem-hash);
+}
+.sem-path {
+  color: var(--sem-path);
+}
+.sem-state-open {
+  color: var(--sem-state-open);
+}
+.sem-state-closed {
+  color: var(--sem-state-closed);
+}
+.sem-state-filtered {
+  color: var(--sem-state-filtered);
+}
+
+/* Accesibilidad: si el usuario pide menos movimiento, se desactivan animaciones. */
+@media (prefers-reduced-motion: reduce) {
+  .tf-node--new .tf-node__card {
+    animation: none;
+    background-image: none;
+  }
+}
