@@ -351,10 +351,213 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/projects/{project_id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sessions */
+        get: operations["list_sessions_api_v1_workspaces__workspace_id__projects__project_id__sessions_get"];
+        put?: never;
+        /** Create Session */
+        post: operations["create_session_api_v1_workspaces__workspace_id__projects__project_id__sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/projects/{project_id}/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Session */
+        delete: operations["delete_session_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Session */
+        patch: operations["rename_session_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/projects/{project_id}/sessions/{session_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Items */
+        get: operations["list_items_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__items_get"];
+        put?: never;
+        /** Add Item */
+        post: operations["add_item_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/projects/{project_id}/sessions/{session_id}/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Item
+         * @description Detalle del ítem (versión vigente); con ``?include_history=true`` incluye el historial.
+         */
+        get: operations["get_item_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__items__item_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Item */
+        delete: operations["delete_item_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__items__item_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit Item
+         * @description Edición = versión NUEVA (append-only); conserva el historial.
+         */
+        patch: operations["edit_item_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__items__item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/projects/{project_id}/sessions/{session_id}/items/{item_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Move Item
+         * @description Reordena el ítem (solo cambia el orden; no versiona ni toca el hash).
+         */
+        patch: operations["move_item_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__items__item_id__move_patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * EvidenceItemCreate
+         * @description Alta/edición de un ítem (en edición, el ``kind`` debe coincidir con el del ítem).
+         */
+        EvidenceItemCreate: {
+            kind: components["schemas"]["EvidenceKind"];
+            /** Command Text */
+            command_text?: string | null;
+            /** Command Output */
+            command_output?: string | null;
+            /** Tool */
+            tool?: string | null;
+            /** Language */
+            language?: string | null;
+            /** Note Text */
+            note_text?: string | null;
+            /** Captured At */
+            captured_at?: string | null;
+            /** After Item Id */
+            after_item_id?: string | null;
+        };
+        /**
+         * EvidenceItemMove
+         * @description Reordenamiento de un ítem: a dónde moverlo (solo cambia el orden, no el contenido).
+         */
+        EvidenceItemMove: {
+            /** After Item Id */
+            after_item_id: string | null;
+        };
+        /**
+         * EvidenceItemRead
+         * @description Ítem con su versión vigente (``current``).
+         */
+        EvidenceItemRead: {
+            /**
+             * Evidence Item Id
+             * Format: uuid
+             */
+            evidence_item_id: string;
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            kind: components["schemas"]["EvidenceKind"];
+            /** Position */
+            position: number;
+            /** Current Version */
+            current_version: number;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            current: components["schemas"]["EvidenceItemVersionRead"];
+        };
+        /** EvidenceItemVersionRead */
+        EvidenceItemVersionRead: {
+            /**
+             * Evidence Item Version Id
+             * Format: uuid
+             */
+            evidence_item_version_id: string;
+            /** Version */
+            version: number;
+            /** Content Hash */
+            content_hash: string;
+            /**
+             * Captured At
+             * Format: date-time
+             */
+            captured_at: string;
+            /** Command Text */
+            command_text: string | null;
+            /** Command Output */
+            command_output: string | null;
+            /** Tool */
+            tool: string | null;
+            /** Language */
+            language: string | null;
+            /** Note Text */
+            note_text: string | null;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * EvidenceKind
+         * @description Tipos de ítem de evidencia del timeline (F1). Solo texto en F1.
+         * @enum {string}
+         */
+        EvidenceKind: "command" | "note";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -516,6 +719,41 @@ export interface components {
             password: string;
             /** Display Name */
             display_name: string;
+        };
+        /** SessionCreate */
+        SessionCreate: {
+            /** Name */
+            name: string;
+        };
+        /** SessionRead */
+        SessionRead: {
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** SessionUpdate */
+        SessionUpdate: {
+            /** Name */
+            name: string;
         };
         /**
          * TransferOwnershipRequest
@@ -1438,6 +1676,356 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MyProjectRead"][];
+                };
+            };
+        };
+    };
+    list_sessions_api_v1_workspaces__workspace_id__projects__project_id__sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_session_api_v1_workspaces__workspace_id__projects__project_id__sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_session_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                project_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_session_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                project_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_items_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__items_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                project_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceItemRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_item_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__items_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                project_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceItemCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceItemRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_item_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__items__item_id__get: {
+        parameters: {
+            query?: {
+                include_history?: boolean;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+                item_id: string;
+                project_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_item_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__items__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                item_id: string;
+                project_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_item_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__items__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                item_id: string;
+                project_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceItemCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceItemRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_item_api_v1_workspaces__workspace_id__projects__project_id__sessions__session_id__items__item_id__move_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                item_id: string;
+                project_id: string;
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceItemMove"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceItemRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

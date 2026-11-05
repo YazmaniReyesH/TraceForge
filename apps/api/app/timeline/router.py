@@ -14,6 +14,7 @@ from app.core.security import Permission, requiere_permiso_proyecto
 from app.timeline.dependencies import get_timeline_service
 from app.timeline.schemas import (
     EvidenceItemCreate,
+    EvidenceItemMove,
     EvidenceItemRead,
     SessionCreate,
     SessionRead,
@@ -89,7 +90,9 @@ async def add_item(
     data: EvidenceItemCreate,
     service: TimelineService = Depends(get_timeline_service),
 ) -> EvidenceItemRead:
-    return await service.add_item(session_id=session_id, data=data)
+    return await service.add_item(
+        session_id=session_id, data=data, after_item_id=data.after_item_id
+    )
 
 
 @router.get(
@@ -134,6 +137,23 @@ async def edit_item(
 ) -> EvidenceItemRead:
     """Edición = versión NUEVA (append-only); conserva el historial."""
     return await service.edit_item(session_id=session_id, item_id=item_id, data=data)
+
+
+@router.patch(
+    "/{session_id}/items/{item_id}/move",
+    response_model=EvidenceItemRead,
+    dependencies=[Depends(_puede_escribir)],
+)
+async def move_item(
+    session_id: UUID,
+    item_id: UUID,
+    data: EvidenceItemMove,
+    service: TimelineService = Depends(get_timeline_service),
+) -> EvidenceItemRead:
+    """Reordena el ítem (solo cambia el orden; no versiona ni toca el hash)."""
+    return await service.move_item(
+        session_id=session_id, item_id=item_id, after_item_id=data.after_item_id
+    )
 
 
 @router.delete(

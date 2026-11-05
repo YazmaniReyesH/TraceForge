@@ -18,6 +18,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -44,7 +45,9 @@ class EvidenceItem(TimestampMixin, Base):
         nullable=False,
     )
     kind: Mapped[EvidenceKind] = mapped_column(StrEnumType(EvidenceKind, length=20), nullable=False)
-    # Orden cronológico dentro de la sesión (se asigna al añadir: siguiente al final).
+    # Orden dentro de la sesión en **escala con huecos** (múltiplos de ~1000; ver ADR-0013).
+    # Permite insertar/reordenar "entre dos" tomando un valor intermedio sin renumerar todo.
+    # NO es único: el orden se desempata determinísticamente por (position, created_at, id).
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     # Puntero a la versión vigente (bookkeeping; el contenido es inmutable en las versiones).
     current_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -62,8 +65,10 @@ class EvidenceItem(TimestampMixin, Base):
             f"kind IN ({sql_in_clause(EvidenceKind)})",
             name="ck_evidence_items_kind",
         ),
-        # Índice de orden del timeline (y cubre el filtro por session_id como columna líder).
-        UniqueConstraint("session_id", "position", name="uq_evidence_items_session_position"),
+        # Índice de orden del timeline, **no único** (ADR-0013): cubre el filtro por session_id
+        # (columna líder) y acelera el ORDER BY (session_id, position). La no-unicidad evita
+        # colisiones transitorias al renumerar o reordenar de forma optimista.
+        Index("ix_evidence_items_session_position", "session_id", "position"),
     )
 
 

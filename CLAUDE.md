@@ -54,20 +54,21 @@ TraceForge/
         projects/            # CRUD de projects + membresías de proyecto (F0-T4b-2)
         timeline/            # sesiones + evidencia append-only (F1-T1): hashing, repo, service, router, schemas
         users/               # borrado seguro de usuario (invariante; sin endpoint de baja)
-      migrations/            # Alembic (async); versions/ con migraciones F0-T3b, F0-T4a y F1-T1
+      migrations/            # Alembic (async); versions/ con migraciones F0-T3b, F0-T4a, F1-T1 y F1-T2
       tests/
       alembic.ini
       pyproject.toml         # deps + ruff + mypy + pytest
       .python-version        # 3.12
     web/        # Frontend React + Vite + TS (npm); Vite proxya /api -> backend en dev
       src/
-        main.tsx · App.tsx     # providers (Theme/Query/Router/PrimeReact) + rutas
-        shared/theme/          # tokens.css (FUENTE ÚNICA), ThemeProvider, tema PrimeReact
+        main.tsx · App.tsx     # providers (Theme/Query/Router/PrimeReact) + rutas (páginas lazy)
+        shared/theme/          # tokens.css (FUENTE ÚNICA; incl. --code-*/--term-* del timeline), ThemeProvider
         shared/api/            # cliente HTTP (CSRF, 401, errores), types.gen.ts (OpenAPI)
         shared/i18n/           # es-MX (sin textos hardcodeados) · shared/ui/ (layout, loader, estados)
         modules/auth/          # login/register/logout, guard, hooks
         modules/workspaces/ · modules/projects/   # pantallas de dominio (lista+detalle, miembros)
         modules/me/            # vista transversal "Mis proyectos" (/projects)
+        modules/timeline/      # timeline de evidencia (F1-T2): sesiones, captura, arrastre, historial, Prism lazy
   packages/
     shared/     # (placeholder) cliente TS generado desde OpenAPI — aún vacío
   docs/
@@ -179,7 +180,20 @@ Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesi
 
 ## Estado actual
 
-**Fase 1 EN CURSO. F1-T1 (timeline: modelo de evidencia, solo backend):** modelo de **sesiones** e
+**Fase 1 EN CURSO. F1-T2 (timeline: reordenar/insertar + UI).** Checkpoint 1 (backend): orden por
+**posiciones con huecos** (múltiplos de ~1000; ADR-0013) con **índice no único** y orden determinista
+`(position, created_at, id)`; `POST /items` acepta `after_item_id` (insertar "entre dos"; sin él,
+append) y `PATCH /items/{id}/move` (reordenar: `null`=inicio, id=después); reordenar **no versiona**
+ni toca hashes (append-only, ADR-0012); renumeración en dos fases al agotar un hueco. **Migración
+F1-T2 aplicada por el equipo** (`9c3e71a2f4b8`: quita UNIQUE + backfill + índice no único).
+Checkpoint 2 (frontend): **pantalla de timeline** (módulo `modules/timeline`) estilo consola de
+operador con riel/glow, bloque de comando tipo terminal, **resaltado de sintaxis lazy** (Prism,
+ADR-0014), notas, telemetría en mono, captura ágil con scanline, **reordenar/insertar por arrastre**
+(optimista), historial con hash y `prefers-reduced-motion`; **code-splitting** de rutas (chunk
+principal ~780→~427 kB, sin aviso > 500 kB). Ver `docs/modulos/timeline.md`, `docs/modulos/frontend.md`,
+`docs/API-CONTRACT.md`, ADR-0013/0014.
+
+**F1-T1 (timeline: modelo de evidencia, solo backend):** modelo de **sesiones** e
 **ítems de evidencia** de texto (`command`/`note`) **append-only y versionados** con SHA-256 por
 versión y **soft-delete** (cadena de custodia, ADR-0012); dos tablas (ítem lógico mutable +
 versiones inmutables). CRUD mínimo bajo el gate de proyecto
