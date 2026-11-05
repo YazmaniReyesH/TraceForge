@@ -32,6 +32,14 @@ class EvidenceKind(StrEnum):
     NOTE = "note"  # texto libre
 
 
+class AICallStatus(StrEnum):
+    """Estado de una llamada registrada en la bitácora de IA (F1-T3)."""
+
+    OK = "ok"  # el proveedor completó la solicitud
+    ERROR = "error"  # error de red/API del proveedor (traducido, sin secretos)
+    NOT_CONFIGURED = "not_configured"  # no hay API key: se degradó sin llamar al proveedor
+
+
 def sql_in_clause(enum: type[StrEnum]) -> str:
     """Devuelve ``'a', 'b', ...`` con los valores del enum, para un CHECK ``IN``."""
     return ", ".join(repr(member.value) for member in enum)
