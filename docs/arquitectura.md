@@ -43,11 +43,12 @@ documento da el panorama y enlaza a cada uno, sin duplicar su contenido.
 | [0012](./adr/0012-evidencia-append-only-y-hashing.md) | Evidencia append-only, versionada y con hash de contenido | aceptado |
 | [0013](./adr/0013-orden-del-timeline-con-posiciones-espaciadas.md) | Orden del timeline con posiciones espaciadas (huecos) e índice no único | aceptado |
 | [0014](./adr/0014-resaltado-de-sintaxis-y-code-splitting.md) | Resaltado de sintaxis (Prism, lazy) y code-splitting del frontend | aceptado |
+| [0015](./adr/0015-bitacora-de-ia-y-estrategia-de-redaccion.md) | Bitácora de llamadas de IA y estrategia de redacción | aceptado |
 
 Documentos relacionados: [`seguridad-datos.md`](./seguridad-datos.md) (resumen operativo de
-seguridad/redacción; lo gobierna el ADR-0005) y la ficha
-[`modulos/modelo-base.md`](./modulos/modelo-base.md) (entidades, columnas e invariantes del
-modelo base).
+seguridad/redacción; lo gobierna el ADR-0005), [`ai-tasks.md`](./ai-tasks.md) (registro de funciones
+de IA) y la ficha [`modulos/modelo-base.md`](./modulos/modelo-base.md) (entidades, columnas e
+invariantes del modelo base).
 
 > Próximos ADRs previstos: capa de "organización" por encima del workspace (si se decide),
 > catálogos (CWE/ATT&CK/CVE) y gateway `AIProvider`. **F0-T3b** materializa el modelo base

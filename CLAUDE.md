@@ -48,13 +48,14 @@ TraceForge/
         core/repository.py   # WorkspaceScopedRepository (filtro por workspace)
         core/integrity.py    # mapeo IntegrityError -> error de dominio (por constraint)
         core/constraints.py  # nombres de constraints centralizados
-        models/              # SQLAlchemy: user, workspace, project, membership, credential, session, evidence, enums, types
+        models/              # SQLAlchemy: user, workspace, project, membership, credential, session, evidence, ai_call_log, enums, types
+        ai/                  # gateway de IA (F1-T3): port AIProvider + Claude, redacción, ensamblado anti-inyección, bitácora, ping
         auth/                # autenticación (F0-T4a): port AuthProvider + local, hashing, tokens, service, router
         workspaces/          # workspaces + membresías e invariantes de owner (F0-T4b): repo, service, router, schemas
         projects/            # CRUD de projects + membresías de proyecto (F0-T4b-2)
         timeline/            # sesiones + evidencia append-only (F1-T1): hashing, repo, service, router, schemas
         users/               # borrado seguro de usuario (invariante; sin endpoint de baja)
-      migrations/            # Alembic (async); versions/ con migraciones F0-T3b, F0-T4a, F1-T1 y F1-T2
+      migrations/            # Alembic (async); versions/ con migraciones F0-T3b, F0-T4a, F1-T1, F1-T2 y F1-T3
       tests/
       alembic.ini
       pyproject.toml         # deps + ruff + mypy + pytest
@@ -137,10 +138,10 @@ El **contrato de negocio de la API** (permisos, reglas, ejemplos, errores por en
 está en [`docs/API-CONTRACT.md`](./docs/API-CONTRACT.md).
 
 Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesita):
-`ai-tasks.md`, `plantillas.md`, `glosario.md` y las fichas de
-`docs/modulos/<modulo>.md` (desde `_plantilla.md`). Ya existen: `seguridad-datos.md`,
-`modulos/modelo-base.md`, `modulos/auth.md`, `modulos/autorizacion.md`, `modulos/projects.md`,
-`modulos/frontend.md`.
+`plantillas.md`, `glosario.md` y las fichas de `docs/modulos/<modulo>.md` (desde `_plantilla.md`). Ya
+existen: `seguridad-datos.md`, `ai-tasks.md` (registro de funciones de IA), `modulos/modelo-base.md`,
+`modulos/auth.md`, `modulos/autorizacion.md`, `modulos/projects.md`, `modulos/frontend.md`,
+`modulos/timeline.md`, `modulos/ia.md`.
 
 ## Convención de trabajo (obligatoria)
 
@@ -180,7 +181,21 @@ Otros documentos de `docs/` (se crean cuando la tanda correspondiente los necesi
 
 ## Estado actual
 
-**Fase 1 EN CURSO. F1-T2 (timeline: reordenar/insertar + UI).** Checkpoint 1 (backend): orden por
+**Fase 1 EN CURSO. F1-T3 (andamiaje de IA: gateway, redacción, ensamblado, bitácora — solo backend).**
+Puerto **`AIProvider`** (dominio, patrón port/adapter como `AuthProvider`) con **Claude** detrás (SDK
+`anthropic`, import perezoso; "IA no configurada" degrada sin romper). Capa de **redacción**
+determinista de secretos (marcadores estables, preserva estructura; PEM/JWT/`sk-`/`AKIA`/`Bearer`/
+asignaciones/ hashes; **PII/IPs fuera por defecto**). **Ensamblado** de prompt con la evidencia como
+**dato no confiable** (frontera con nonce, anti-inyección). **Bitácora** `ai_call_log` (qué se envió
+**ya redactado** + SHA-256 + conteo; nunca el crudo, el mapeo ni la key; aislamiento por workspace/
+project). **Ping** verificable `POST …/ai/ping` (contenido sintético; siempre 200 con `status`
+ok/error/not_configured) y `GET …/ai/status`. Modelo/clave por settings (`TF_ANTHROPIC_*`, por
+defecto `claude-sonnet-4-5`). **Sin función de producto (F1-T4), sin UI, sin frontend.** **Migración
+F1-T3 generada, sin aplicar** (`b7d9e1c4a2f5`: crea `ai_call_log`). Pruebas con **doble del puerto**
+(no llaman a la API real). Ver `docs/modulos/ia.md`, `docs/ai-tasks.md`, `docs/API-CONTRACT.md`,
+`docs/seguridad-datos.md`, ADR-0015.
+
+**F1-T2 (timeline: reordenar/insertar + UI).** Checkpoint 1 (backend): orden por
 **posiciones con huecos** (múltiplos de ~1000; ADR-0013) con **índice no único** y orden determinista
 `(position, created_at, id)`; `POST /items` acepta `after_item_id` (insertar "entre dos"; sin él,
 append) y `PATCH /items/{id}/move` (reordenar: `null`=inicio, id=después); reordenar **no versiona**

@@ -235,11 +235,49 @@ un `session_id`/`item_id` de otro project ⇒ **404**). Mutaciones exigen **CSRF
 
 ---
 
+## Gateway de IA — `/api/v1/workspaces/{wid}/projects/{pid}/ai` (F1-T3)
+
+Andamiaje de IA (ADR-0003/0004/0005, ADR-0015). **Aún sin función de producto** (sugerir paso /
+generar descripción es F1-T4): solo estado y un **ping verificable**. Ambos bajo el **gate de
+proyecto** (aislamiento por workspace/project) y **CSRF** en mutaciones. El modelo y la API key salen
+de configuración (`TF_ANTHROPIC_*`), nunca del cliente. Ver ficha [`modulos/ia.md`](./modulos/ia.md).
+
+### GET `/ai/status`
+- **Permiso:** `projects:read` (viewer+). **No** llama al proveedor ni cuesta.
+- **200** → `{ "configured": <bool>, "provider": "claude", "model": "<modelo>" }`.
+  `configured=false` cuando falta `TF_ANTHROPIC_API_KEY`.
+
+### POST `/ai/ping`
+- **Permiso:** `projects:update` (contributor/lead; owner/admin = piso lead). Hace una llamada
+  **real y de pago** al proveedor y **registra** en la bitácora. **CSRF** obligatorio. Sin cuerpo
+  (el contenido es **sintético**, fijado en el servidor: incluye un secreto falso y un intento de
+  inyección falso).
+- Ejecuta el circuito completo: **redacta** → **ensambla** (evidencia delimitada como dato no
+  confiable) → **llama** a Claude (si hay key) → **registra** en `ai_call_log`.
+- **Siempre 200** (es un diagnóstico: reporta el estado del circuito, no es el circuito). El campo
+  `status` dice qué pasó:
+  - `ok` — el proveedor respondió; `response_text` trae la respuesta de Claude y los tokens.
+  - `not_configured` — no hay API key: **no** se llamó al proveedor (degradación clara);
+    `response_text=null`.
+  - `error` — error de red/API del proveedor (traducido, sin secretos); `error_code` lo identifica
+    (p. ej. `ai_provider_error`); `response_text=null`.
+- **200** → `AIPingResult` = `{ ai_call_log_id, status, configured, provider, model,
+  redaction_count, redacted_evidence, assembled_user_prompt, response_text, input_tokens,
+  output_tokens, error_code }`. Todo lo devuelto es **seguro** (ya redactado): `redacted_evidence`
+  prueba que la redacción corrió; `assembled_user_prompt` muestra la evidencia delimitada.
+- **403** si viewer (solo lee estado, no hace ping). **404** si no es miembro del project (aislamiento).
+
+**Qué guarda la bitácora** (`ai_call_log`, ADR-0015): proveedor, modelo, estado, tokens, el prompt
+**ya redactado** + su SHA-256, el conteo de redacciones, `error_code`, usuario y workspace/project.
+**Nunca** el contenido sin redactar, el mapeo marcador→valor, ni la API key.
+
+---
+
 ## Pendiente (próximas tandas)
 
 - **F0-T5:** token anti-CSRF; theming.
-- **F1:** UI del timeline (F1-T2); funciones de IA sobre evidencia con procedencia (F1-T3/T4);
-  evidencia binaria/archivos (almacenamiento de objetos, diferido); hallazgos que referencian
-  **versiones** de evidencia; política de retención/purga de evidencia borrada.
+- **F1:** funciones **de producto** de IA sobre evidencia con procedencia (F1-T4, sobre el gateway de
+  F1-T3); evidencia binaria/archivos (almacenamiento de objetos, diferido); hallazgos que referencian
+  **versiones** de evidencia; política de retención/purga de evidencia borrada y de la bitácora de IA.
 - **Más adelante:** flujo de baja de cuenta (el invariante de borrado seguro ya está a nivel
   servicio); invitación por email de usuarios nuevos.

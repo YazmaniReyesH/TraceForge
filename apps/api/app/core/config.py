@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     argon2_memory_cost: int = 65536  # KiB (64 MiB)
     argon2_parallelism: int = 4
 
+    # ── Gateway de IA / proveedor Claude (F1-T3) ──
+    # API key del proveedor. VACÍA por defecto => estado "IA no configurada": el gateway
+    # degrada con claridad y NO rompe la app. NUNCA se commitea ni se escribe en logs/bitácora.
+    anthropic_api_key: str = ""
+    # Modelo por defecto (configurable; NO se clava en el código, se lee de aquí).
+    anthropic_model: str = "claude-sonnet-4-5"
+    # Tope de tokens de salida por llamada.
+    anthropic_max_tokens: int = 1024
+    # Timeout (segundos) de la llamada al proveedor.
+    anthropic_timeout_seconds: float = 30.0
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_cors_origins(cls, value: object) -> object:
