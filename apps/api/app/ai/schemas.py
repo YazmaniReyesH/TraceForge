@@ -1,4 +1,4 @@
-"""Schemas del gateway de IA: estado y ping (F1-T3); sugerencias de IA (F1-T4a)."""
+"""Schemas del gateway de IA: estado y ping (F1-T3); sugerencias (F1-T4a); análisis (F1-T4c)."""
 
 from datetime import datetime
 from typing import Any
@@ -6,6 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.ai.analysis_task import SessionAnalysisOutput
 from app.models.enums import AICallStatus, AISuggestionKind, AISuggestionStatus
 
 
@@ -83,5 +84,32 @@ class AISuggestionRead(BaseModel):
     reviewed_by: UUID | None
     reviewed_at: datetime | None
     created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+# ── Análisis de contexto de sesión (F1-T4c) ──
+
+
+class SessionAnalysisRead(BaseModel):
+    """Análisis de contexto de una sesión: los 4 bloques + fase + metadatos (ADR-0017).
+
+    Es **efímero** (no aprobable). ``from_cache`` indica si se devolvió el análisis guardado sin
+    llamar a la API (hash-guard). ``result`` son los 4 bloques validados; la fase va en
+    ``result.fase_detectada``. NUNCA expone el mapeo cifrado ni valores crudos.
+    """
+
+    session_id: UUID
+    from_cache: bool
+    analyzed_item_count: int
+    state_hash: str
+    result: SessionAnalysisOutput
+    # Procedencia (ADR-0003)
+    provider: str
+    model: str
+    prompt_version: str
+    ai_call_log_id: UUID | None
+    redaction_count: int
+    redaction_map_stored: bool
     created_at: datetime
     updated_at: datetime

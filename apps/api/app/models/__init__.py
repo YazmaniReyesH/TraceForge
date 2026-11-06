@@ -16,12 +16,14 @@ from app.models.enums import (
     AISuggestionStatus,
     EvidenceKind,
     ProjectRole,
+    SessionPhase,
     WorkspaceRole,
 )
 from app.models.evidence import EvidenceItem, EvidenceItemVersion
 from app.models.membership import ProjectMembership, WorkspaceMembership
 from app.models.project import Project
 from app.models.session import Session
+from app.models.session_analysis import SessionAnalysis
 from app.models.user import User
 from app.models.workspace import Workspace
 
@@ -40,6 +42,8 @@ __all__ = [
     "ProjectMembership",
     "ProjectRole",
     "Session",
+    "SessionAnalysis",
+    "SessionPhase",
     "User",
     "UserCredential",
     "Workspace",

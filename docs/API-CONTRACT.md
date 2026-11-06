@@ -273,7 +273,49 @@ de configuración (`TF_ANTHROPIC_*`), nunca del cliente. Ver ficha [`modulos/ia.
 
 ---
 
-## Sugerencias de IA — `.../projects/{pid}/sessions/{sid}/suggestions` (F1-T4a)
+## Análisis de contexto de sesión — `.../sessions/{sid}/analyze` · `/analysis` (F1-T4c)
+
+Función de IA **de producto activa** (ADR-0017, sobre ADR-0003/0004/0005/0015/0016): a partir de la
+evidencia **activa** de una sesión **en orden de `position`**, la IA devuelve una **guía efímera** de
+4 bloques + `fase_detectada`. **No es aprobable** (no hay accept/edit): es guía viva y desechable. Bajo
+el **gate de proyecto** (aislamiento) y **CSRF** en mutaciones. Modelo de `ai_policy` con fallback
+`.env`. La respuesta **nunca** expone el mapeo cifrado ni valores crudos.
+
+### POST `/analyze`
+- **Permiso:** `projects:update` (contributor/lead; viewer no). **CSRF.** Puede hacer una llamada
+  **real y de pago** al proveedor.
+- **Query:** `force` (opcional, `bool`, por defecto `false`): fuerza re-análisis aunque el hash coincida.
+- **Hash-guard:** se calcula un `state_hash` de los ítems activos (`id + versión + posición`, en orden)
+  + versión de prompt. Si coincide con el guardado y no hay `force`, se devuelve el análisis guardado
+  **sin llamar al LLM** (`from_cache=true`). Si cambió (editar/reordenar/borrar) o con `force`, se
+  llama: junta evidencia en orden → **redacta** → **ensambla** (dato no confiable + **prompt caching**
+  del bloque de evidencia) → **llama** pidiendo salida estructurada → **valida** los 4 bloques
+  (ADR-0004) → **cachea** por sesión → **registra** (`ai_call_log`).
+- **200** → `SessionAnalysisRead` (ver forma abajo), `from_cache` indica si vino de caché.
+- **409 `ai_no_evidence`** si la sesión no tiene evidencia activa. **502 `ai_invalid_output`** si el
+  modelo devolvió una forma inválida (no se entrega ni se cachea). **502 `ai_provider_error`** ante
+  error de red/API. **503 `ai_not_configured`** si falta `TF_ANTHROPIC_API_KEY`. **403** viewer.
+  **404** si no es miembro del project o la sesión no existe (aislamiento).
+
+### GET `/analysis`
+- **Permiso:** `projects:read` (viewer+). Devuelve el **último** análisis guardado **sin llamar al LLM**.
+- **200** → `SessionAnalysisRead` (`from_cache=true`). **404 `ai_no_analysis`** si la sesión aún no
+  tiene análisis. **404** por aislamiento si no es miembro.
+
+**Forma de respuesta** `SessionAnalysisRead` = `{ session_id, from_cache, analyzed_item_count,
+state_hash, result, provider, model, prompt_version, ai_call_log_id, redaction_count,
+redaction_map_stored, created_at, updated_at }`, donde `result` es la guía validada de 4 bloques:
+`{ siguiente_objetivo, evaluacion:{estado_actual, evidencia_observada[]}, validacion_sugerida:[{comando,
+para_que?}], precauciones[], fase_detectada }` (`fase_detectada` ∈ `recon|enumeración|foothold|privesc|otra`).
+
+---
+
+## Sugerencias de IA — `.../projects/{pid}/sessions/{sid}/suggestions` (F1-T4a) · **APARCADO (deprecado) en F1-T4c**
+
+> **Aparcado (ADR-0017):** estos endpoints quedan **deprecados** (siguen montados por compatibilidad y
+> posible reutilización en la fase de reporte, pero no deben usarse para nada nuevo). Los reemplaza el
+> **análisis de contexto de sesión** (arriba). Las tablas `ai_suggestions`/`ai_redaction_maps` se
+> conservan; no hay migración destructiva.
 
 Primera función de IA **de producto** (ADR-0003/0004/0005/0016): a partir de la evidencia **real** de
 una sesión, la IA **propone** una `description` o un `next_step`. Toda sugerencia nace **`pending`**

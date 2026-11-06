@@ -1,12 +1,16 @@
 # Ficha de módulo: ia (gateway de IA)
 
-- **Fase / tanda:** F1-T3 (andamiaje) · **F1-T4a** (1ª función de producto: sugerencias, solo backend)
+- **Fase / tanda:** F1-T3 (andamiaje) · F1-T4a/T4b (sugerencias, **aparcadas**) · **F1-T4c**
+  (análisis de contexto efímero, solo backend)
 - **Estado del módulo:** gateway `AIProvider` con Claude detrás del puerto; **redacción** determinista
-  de secretos; **ensamblado** anti-inyección; **bitácora** (`ai_call_log`); **ping verificable**; y
-  **sugerencias de IA** (`description` / `next_step`) a partir de la evidencia **real** de una sesión,
-  con **procedencia** (ADR-0003), **salida estructurada validada** (ADR-0004) y **mapeo de redacción
-  cifrado** (ADR-0016), más su máquina de estados (pending→accepted/edited). **Sin UI ni el violeta de
-  IA** (F1-T4b), sin rehidratación efectiva, sin otros proveedores.
+  de secretos; **ensamblado** anti-inyección; **bitácora** (`ai_call_log`); **ping verificable**. La
+  función de producto **activa** es el **análisis de contexto de sesión** (F1-T4c, ADR-0017): guía
+  **efímera** de 4 bloques + `fase_detectada` a partir de la evidencia activa **en orden de `position`**,
+  con **procedencia** (ADR-0003), **salida validada** (ADR-0004), **redacción** + **mapeo cifrado**
+  (ADR-0005/0016) y optimización de tokens por **hash-guard + prompt caching**. El flujo de
+  **sugerencias** (`description`/`next_step` + accept/edit, F1-T4a/b) queda **aparcado/deprecado** (no
+  borrado; tablas conservadas). Sin rehidratación efectiva, sin otros proveedores. **Migración F1-T4c
+  generada, sin aplicar** (`a4e8c21f9b63`: crea `ai_session_analyses`).
 - **Última actualización:** 2026-11-06
 
 ## Propósito
@@ -21,25 +25,30 @@ ensamblado anti-inyección y la bitácora, y los verifica con un ping real a Cla
 
 ```
 app/ai/
-  port.py             # Puerto AIProvider (dominio): AIPrompt, AICompletion, complete()/name/model/is_configured
-  claude_provider.py  # Implementación Claude (SDK anthropic, import perezoso); model override (ai_policy)
-  errors.py           # AIError + AINotConfigured(503)/AIProvider(502)/AIInvalidOutput(502)/AINoEvidence(409)/…
+  port.py             # Puerto AIProvider (dominio): AIPrompt(+user_blocks), PromptBlock, AICompletion
+  claude_provider.py  # Implementación Claude (SDK anthropic, import perezoso); prompt caching por bloques
+  errors.py           # AIError + AINotConfigured(503)/AIProvider(502)/AIInvalidOutput(502)/AINoEvidence(409)/AINoAnalysis(404)/…
   redaction.py        # redact(text) -> RedactionResult (texto redactado + mapa en memoria + conteo)
-  prompt.py           # assemble_prompt(instruction, evidence): evidencia delimitada como dato no confiable
+  prompt.py           # assemble_prompt (nonce) y assemble_analysis_prompt (frontera determinista + caché)
   crypto.py           # RedactionCipher (Fernet): cifra/descifra el mapeo marcador→valor (ADR-0016)
-  tasks.py            # Registro de AI tasks (description/next_step): prompt versionado + salida validada
-  schemas.py          # AIStatusRead, AIPingResult, AISuggestion{Generate,Edit,Read}
+  analysis_task.py    # AI task ACTIVA: schema de 4 bloques + fase + parse (session_analysis/v1)
+  analysis_repository.py # SessionAnalysisRepository (caché por sesión) — aislado
+  analysis_service.py # SessionAnalysisService: orden→redactar→hash-guard→ensamblar→llamar→validar→cachear
+  analysis_router.py  # /…/sessions/{sid}/analyze (POST, force) · /analysis (GET último)
+  tasks.py            # [APARCADO] AI tasks description/next_step (ADR-0017)
+  schemas.py          # AIStatusRead, AIPingResult, SessionAnalysisRead, AISuggestion{…} (aparcado)
   repository.py       # AICallLogRepository (acotado a workspace+project) — solo inserta
-  suggestions_repository.py  # AISuggestionRepository (sugerencias + mapeo cifrado) — aislado
+  suggestions_repository.py  # [APARCADO] AISuggestionRepository
   service.py          # AIService: redactar → ensamblar → proveedor → bitácora (+ ping sintético)
-  suggestions_service.py     # AISuggestionService: generar/aceptar/editar (circuito F1-T4a)
-  dependencies.py     # get_ai_provider (lee ai_policy), get_redaction_cipher, get_ai_(suggestion_)service
+  suggestions_service.py     # [APARCADO] AISuggestionService (circuito F1-T4a)
+  dependencies.py     # get_ai_provider (lee ai_policy), get_redaction_cipher, get_session_analysis_service
   router.py           # /…/ai  (GET /status, POST /ping)
-  suggestions_router.py      # /…/sessions/{sid}/suggestions (POST, GET, {id}/accept, {id}/edit)
+  suggestions_router.py      # [APARCADO/deprecado] /…/sessions/{sid}/suggestions
 app/models/
   ai_call_log.py      # AICallLog (tabla ai_call_log)
-  ai_suggestion.py    # AISuggestion (tabla ai_suggestions): contenido + procedencia + estado
-  ai_redaction_map.py # AIRedactionMap (tabla ai_redaction_maps): mapeo marcador→valor CIFRADO
+  session_analysis.py # SessionAnalysis (tabla ai_session_analyses): caché del análisis por sesión (F1-T4c)
+  ai_suggestion.py    # [APARCADO] AISuggestion (tabla ai_suggestions)
+  ai_redaction_map.py # [APARCADO] AIRedactionMap (tabla ai_redaction_maps)
 ```
 
 Respeta las capas `router → service → repository`. El servicio **arma el prompt** (redacción +
@@ -116,7 +125,50 @@ Una fila por llamada (append-only en la práctica). **Qué guarda y por qué:** 
 `redaction_count`, `error_code` (código estable, sin secretos), `created_by` (FK RESTRICT),
 `created_at`. **Nunca** guarda el contenido crudo, el mapeo marcador→valor, ni la API key.
 
-## Función de producto: sugerencias de IA (F1-T4a)
+## Función de producto ACTIVA: análisis de contexto de sesión (F1-T4c, ADR-0017)
+
+A partir de la evidencia **activa** de una sesión **en orden de `position`**, la IA devuelve una **guía
+efímera** de 4 bloques para documentar en vivo. **No es aprobable** (no hay accept/edit): es guía viva y
+desechable; cada análisis refleja el estado en ese instante. Reemplaza al flujo de sugerencias (abajo,
+aparcado).
+
+**Salida de 4 bloques** (`analysis_task.py`, `session_analysis/v1`), validada (ADR-0004):
+`siguiente_objetivo` · `evaluacion{estado_actual, evidencia_observada[]}` ·
+`validacion_sugerida[{comando, para_que?}]` · `precauciones[]` + `fase_detectada`
+(`recon|enumeración|foothold|privesc|otra`, enum `SessionPhase`).
+
+**Flujo del servicio** (`SessionAnalysisService.analyze`, router→service→repository):
+
+1. **Junta** los ítems activos de la sesión **en orden de `position`** (reutiliza `TimelineRepository`;
+   la **fecha** de captura NO determina el orden). Sin ítems → `ai_no_evidence` (409).
+2. **Redacta** (ADR-0005) — nunca sale un secreto crudo.
+3. **Hash-guard:** calcula el `state_hash` del estado analizable (`id + versión + posición`, en orden, +
+   versión de prompt). Si hay un análisis guardado con el **mismo** hash y no se pidió `force`, **devuelve
+   el guardado sin llamar al LLM** (`from_cache=true`). No registra otra llamada.
+4. Si cambió (editar/reordenar/borrar) o con `force`: **ensambla** con la evidencia como dato no confiable
+   (frontera **determinista** derivada del hash, para habilitar **prompt caching**) → **llama** al
+   `AIProvider` (modelo de `ai_policy` o `.env`) → **valida** los 4 bloques → **cachea** por sesión (una
+   fila) con hash + procedencia → **registra** en `ai_call_log`.
+5. Errores (todos registrados): `ai_not_configured` (503), `ai_provider_error` (502), `ai_invalid_output`
+   (502, no se entrega ni se cachea una guía con forma inválida).
+
+**Optimización de tokens (ADR-0017):** *hash-guard* (evita re-llamar si el estado no cambió) + *prompt
+caching* del bloque grande de evidencia (frontera determinista → el prefijo es estable byte a byte; un
+refresco `force` del mismo estado reutiliza los tokens de entrada cacheados; **reordenar/editar invalida**
+la caché). Sin "deltas".
+
+**Caché por sesión** (`ai_session_analyses`, una fila por sesión): `state_hash`, `result` (JSONB de 4
+bloques), `analyzed_item_count`, procedencia (ADR-0003), y el **mapeo de redacción cifrado** (Fernet,
+ADR-0016) en `redaction_ciphertext` (NULL si no hubo secretos o faltaba la clave; jamás en claro). Reusa
+el mecanismo de ADR-0016 sin tocar la tabla parada `ai_redaction_maps`. Es **caché**, no contenido
+aprobable. `GET /analysis` devuelve el último (viewer+, sin llamar al LLM) o `ai_no_analysis` (404).
+
+## Función de producto APARCADA: sugerencias de IA (F1-T4a — ver ADR-0017)
+
+> **Aparcada en F1-T4c (ADR-0017):** el flujo de sugerencias se conserva (código + tablas
+> `ai_suggestions`/`ai_redaction_maps`) por si se reutiliza en la fase de reporte, pero sus endpoints
+> quedan **deprecados** (`deprecated=True`) y no deben usarse para nada nuevo. No hay migración
+> destructiva. Lo que sigue describe ese flujo histórico.
 
 Primera función de IA de cara al producto: a partir de la evidencia **real** de una sesión, genera una
 sugerencia (`description` o `next_step`) que **nace `pending`** y que el usuario **acepta** o **edita**.
@@ -153,11 +205,12 @@ futura selección desde UI; no construye lógica de política compleja. Aplica t
 
 ## Endpoints
 
-Ver [`../API-CONTRACT.md`](../API-CONTRACT.md) → *Gateway de IA* y *Sugerencias de IA*. Resumen:
-`GET /…/ai/status` (`projects:read`), `POST /…/ai/ping` (`projects:update`; CSRF; siempre 200 con
-`status`); y bajo la sesión, `POST|GET /…/sessions/{sid}/suggestions` (generar/listar) y
-`POST …/suggestions/{id}/accept|edit` (transiciones). Generar/aceptar/editar → `projects:update`
-(viewer no); listar → `projects:read`. La respuesta nunca expone el mapeo cifrado ni valores crudos.
+Ver [`../API-CONTRACT.md`](../API-CONTRACT.md) → *Gateway de IA* y *Análisis de contexto de sesión*.
+Resumen: `GET /…/ai/status` (`projects:read`), `POST /…/ai/ping` (`projects:update`; CSRF; siempre 200
+con `status`); y bajo la sesión (F1-T4c): **`POST …/sessions/{sid}/analyze`** (con `force` opcional;
+`projects:update`, viewer no) y **`GET …/sessions/{sid}/analysis`** (último guardado, sin llamar al LLM;
+`projects:read`, viewer+). **Aparcados/deprecados** (ADR-0017): `…/sessions/{sid}/suggestions`
+(+ `/accept`, `/edit`). La respuesta nunca expone el mapeo cifrado ni valores crudos.
 
 ## Migración
 
@@ -165,11 +218,14 @@ Ver [`../API-CONTRACT.md`](../API-CONTRACT.md) → *Gateway de IA* y *Sugerencia
   `9c3e71a2f4b8`). Crea `ai_call_log`. **Aplicada por el equipo** (la BD de dev está en
   `b7d9e1c4a2f5`).
 - **F1-T4a** `20261106_0900-f3a1c9d7b2e4_crear_sugerencias_de_ia_y_mapeo_cifrado.py` (down_revision
-  `b7d9e1c4a2f5`). **Hand-written** (create tables): crea `ai_suggestions` (CHECK nombrados de
-  `kind`/`status`; FKs CASCADE en workspace/project/session, RESTRICT en `created_by`/`reviewed_by`,
-  SET NULL en `ai_call_log_id`; índices de aislamiento) y `ai_redaction_maps` (mapeo cifrado; FK CASCADE
-  a la sugerencia). Reversible. **Pendiente de aplicar por el equipo** (`task db-upgrade`); Claude no la
-  aplica.
+  `b7d9e1c4a2f5`). Crea `ai_suggestions` y `ai_redaction_maps`. **Aplicada por el equipo** (la BD de dev
+  está en `f3a1c9d7b2e4`). Las tablas **se conservan** aunque el flujo quede aparcado (ADR-0017).
+- **F1-T4c** `20261106_1500-a4e8c21f9b63_crear_cache_de_analisis_de_sesion.py` (down_revision
+  `f3a1c9d7b2e4`). **Hand-written** (create table): crea `ai_session_analyses` (una fila por sesión,
+  **UNIQUE `session_id`**; `state_hash`, `result` JSONB, procedencia, `redaction_ciphertext` cifrado
+  nullable; FKs CASCADE en workspace/project/session, RESTRICT en `created_by`, SET NULL en
+  `ai_call_log_id`; índices de aislamiento). **No** borra las tablas aparcadas. Reversible. **Pendiente
+  de aplicar por el equipo** (`task db-upgrade`); Claude no la aplica.
 
 ## Pruebas
 
@@ -191,25 +247,39 @@ transicionan y **conservan el original** + el rastro de IA; viewer 403 (pero lis
 **Las pruebas NUNCA llaman a la API real** (`_FakeProvider` vía `app.dependency_overrides`). Los
 escenarios contra la BD se **omiten** si falta el esquema (`run_db_test(..., requires="ai_suggestions")`).
 
-## Cómo configurar y verificar (ping y generación real)
+`tests/test_ai_analysis.py` (F1-T4c). **Unitarias:** validación de la salida de 4 bloques (válida, con
+```fences```, **rechazo** de forma inválida y de **fase desconocida**). **Contra la BD (doble del
+puerto):** analizar con evidencia devuelve los 4 bloques + `fase_detectada` validados; la evidencia se
+**redacta antes de enviarse** y el prompt usa **bloques con caché**; el **hash-guard** evita la 2ª
+llamada si nada cambió (se verifica que el doble **no** se invocó); **reordenar** (por `position`, no
+fecha) y **borrar** un ítem cambian el hash y **sí** re-llaman; `force` re-llama aunque el hash coincida;
+salida inválida (502) → registrada, sin entregar ni cachear; `ai_no_evidence` (409); sin
+`TF_ENCRYPTION_KEY` el mapeo **no** se guarda (`redaction_map_stored=false`); **viewer** puede leer el
+último (`GET /analysis`) pero **no** analizar (403); aislamiento 404. Se **omiten** si falta la tabla
+(`run_db_test(..., requires="ai_session_analyses")`).
 
-1. En `apps/api/.env`: `TF_ANTHROPIC_API_KEY=<tu clave>` (opcional `TF_ANTHROPIC_MODEL`) y
-   `TF_ENCRYPTION_KEY=<clave Fernet>` (generar con
+## Cómo configurar y verificar (ping y análisis real)
+
+1. En `apps/api/.env`: `TF_ANTHROPIC_API_KEY=<tu clave>` (opcional `TF_ANTHROPIC_MODEL`,
+   `TF_ANTHROPIC_ANALYSIS_MAX_TOKENS`) y `TF_ENCRYPTION_KEY=<clave Fernet>` (generar con
    `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`).
 2. `task up` y aplicar las migraciones: `task db-upgrade` (la aplica **el equipo**).
 3. `task dev-api`; autenticarse y crear workspace+project; **ping**: `POST …/ai/ping` (CSRF).
-4. **Generación real:** crear una sesión y uno o más ítems de evidencia; luego
-   `POST …/sessions/{sid}/suggestions` con `{"kind":"description"}` (CSRF). Devuelve la sugerencia
-   `pending` con procedencia; con `TF_ENCRYPTION_KEY` el mapeo queda cifrado (`redaction_map_stored=true`).
-   Aceptar/editar: `POST …/suggestions/{id}/accept` | `/edit`.
-5. Sin `TF_ANTHROPIC_API_KEY`: la generación responde `503 ai_not_configured` (degrada). Sin
-   `TF_ENCRYPTION_KEY`: la sugerencia se crea pero no se guarda el mapeo (`redaction_map_stored=false`).
+4. **Análisis real (F1-T4c):** crear una sesión y uno o más ítems de evidencia; luego
+   `POST …/sessions/{sid}/analyze` (CSRF). Devuelve los 4 bloques + `fase_detectada` (`from_cache=false`).
+   Repetir sin cambios → `from_cache=true` (no llama al LLM); con `?force=true` re-llama; tras
+   editar/reordenar/borrar un ítem, re-llama. `GET …/sessions/{sid}/analysis` devuelve el último.
+5. Sin `TF_ANTHROPIC_API_KEY`: el análisis responde `503 ai_not_configured` (degrada). Sin
+   `TF_ENCRYPTION_KEY`: el análisis se entrega pero no se guarda el mapeo (`redaction_map_stored=false`).
 
 ## Pendiente / `[[POR LLENAR]]`
 
-- UI y el **violeta de IA** (F1-T4b): pantallas para generar/revisar/aceptar/editar sugerencias.
+- **UI del análisis (F1-T4d):** sidebar derecho que consume `POST /analyze` y `GET /analysis`.
+- **Flujo aparcado (ADR-0017):** decidir en la fase de **reporte** si se reutiliza o retira
+  `ai_suggestions`/`ai_redaction_maps` (hoy conservadas, endpoints deprecados).
 - **Rehidratación efectiva**: descifrar el mapeo y mostrar valores a un usuario autorizado (hoy solo
   se persiste cifrado) + rotación de la clave (MultiFernet) — ADR-0016.
+- **Retención/purga del caché de análisis** (`ai_session_analyses`) y de la bitácora/mapeo cifrado.
 - Más funciones de IA (resumen; CVSS/CWE/CVE/ATT&CK con validación contra catálogo, F2; traducción) —
   cada una registrada en [`../ai-tasks.md`](../ai-tasks.md).
 - Política de IA por proyecto (`projects.ai_policy`) completa: proveedores permitidos, imágenes,

@@ -1,9 +1,15 @@
-"""Router de sugerencias de IA (F1-T4a), bajo la jerarquía project→sesión.
+"""Router de sugerencias de IA (F1-T4a) — **APARCADO** en F1-T4c (ADR-0017).
+
+Este flujo (``description``/``next_step`` persistidas con ``accept``/``edit``) se **aparca**: lo
+sustituye el *análisis de contexto efímero* (``analysis_router.py``). Los endpoints quedan marcados
+como **deprecados** (``deprecated=True`` → tachados en ``/docs``), pero **siguen montados** para no
+romper nada que aún los consuma y por si se reutilizan en la fase de reporte. No borrar las tablas
+``ai_suggestions``/``ai_redaction_maps`` (ADR-0017). Nada nuevo debería construirse sobre ellos.
 
 Permisos por **rol efectivo** (ADR-0002): generar/aceptar/editar → ``projects:update``
-(contributor/lead; viewer no, porque hacen una llamada de pago y crean/mutan contenido); listar →
-``projects:read`` (viewer+). CSRF (ADR-0010) en mutaciones. Aislamiento vía el contexto de proyecto
-y el filtro por sesión. La respuesta NUNCA expone el mapeo cifrado ni valores crudos.
+(contributor/lead; viewer no); listar → ``projects:read`` (viewer+). CSRF (ADR-0010) en mutaciones.
+Aislamiento vía el contexto de proyecto y el filtro por sesión. La respuesta NUNCA expone el mapeo
+cifrado ni valores crudos.
 """
 
 from uuid import UUID
@@ -20,6 +26,7 @@ router = APIRouter(
     prefix="/api/v1/workspaces/{workspace_id}/projects/{project_id}/sessions/{session_id}/suggestions",
     tags=["ia"],
     dependencies=[Depends(require_csrf)],
+    deprecated=True,  # F1-T4c: flujo aparcado (ADR-0017); sustituido por el análisis de contexto.
 )
 
 _puede_leer = requiere_permiso_proyecto(Permission.PROJECTS_READ)

@@ -45,6 +45,7 @@ documento da el panorama y enlaza a cada uno, sin duplicar su contenido.
 | [0014](./adr/0014-resaltado-de-sintaxis-y-code-splitting.md) | Resaltado de sintaxis (Prism, lazy) y code-splitting del frontend | aceptado |
 | [0015](./adr/0015-bitacora-de-ia-y-estrategia-de-redaccion.md) | Bitácora de llamadas de IA y estrategia de redacción | aceptado |
 | [0016](./adr/0016-cifrado-del-mapeo-de-redaccion.md) | Cifrado del mapeo de redacción (rehidratación futura) | aceptado |
+| [0017](./adr/0017-analisis-efimero-vs-sugerencias-persistidas.md) | Análisis de contexto efímero vs. sugerencias persistidas (hash-guard + prompt caching; aparca F1-T4a) | aceptado |
 
 Documentos relacionados: [`seguridad-datos.md`](./seguridad-datos.md) (resumen operativo de
 seguridad/redacción; lo gobierna el ADR-0005), [`ai-tasks.md`](./ai-tasks.md) (registro de funciones
