@@ -21,3 +21,24 @@ class AIProviderError(AIError):
     code = "ai_provider_error"
     status_code = 502
     default_message = "El proveedor de IA no pudo completar la solicitud"
+
+
+class AIInvalidOutputError(AIError):
+    # La salida del modelo no cumple el JSON Schema esperado (ADR-0004: el código valida la forma).
+    code = "ai_invalid_output"
+    status_code = 502
+    default_message = "La IA devolvió una respuesta con una forma inválida"
+
+
+class AINoEvidenceError(AIError):
+    # No hay evidencia en la sesión sobre la cual generar una sugerencia.
+    code = "ai_no_evidence"
+    status_code = 409
+    default_message = "La sesión no tiene evidencia sobre la cual generar una sugerencia"
+
+
+class AISuggestionInvalidTransitionError(AIError):
+    # Transición de estado no permitida (p. ej. aceptar una ya aceptada).
+    code = "ai_suggestion_invalid_transition"
+    status_code = 409
+    default_message = "La sugerencia no admite esta transición de estado"

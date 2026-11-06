@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.ai.router import router as ai_router
+from app.ai.suggestions_router import router as ai_suggestions_router
 from app.auth.router import router as auth_router
 from app.core.config import Settings, get_settings
 from app.core.db import database_ready, get_engine
@@ -83,6 +84,7 @@ def create_app() -> FastAPI:
     app.include_router(me_router)
     app.include_router(timeline_router)
     app.include_router(ai_router)
+    app.include_router(ai_suggestions_router)
 
     return app
 

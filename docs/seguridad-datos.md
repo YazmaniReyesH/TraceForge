@@ -31,7 +31,18 @@ y el gateway de IA (F1+).
   (dependen de la política/clasificación del proyecto).
 - El catálogo exacto de patrones y su configuración por clasificación se seguirá ampliando.
   `[[POR LLENAR: catálogo de patrones ampliado y redacción de PII/IPs por clasificación — con la
-  política de IA por proyecto en F1-T4; persistencia cifrada del mapeo marcador→valor.]]`
+  política de IA por proyecto.]]`
+
+## Persistencia cifrada del mapeo de redacción (F1-T4a, ADR-0016)
+
+- Al fluir evidencia **real** (sugerencias de IA), el mapeo `marcador→valor real` se guarda **cifrado**
+  con **Fernet** en la tabla `ai_redaction_maps` (`app/ai/crypto.py`), para poder **rehidratar** valores
+  a un usuario autorizado más adelante. **Nunca en claro**; la clave vive solo en `TF_ENCRYPTION_KEY`
+  (entorno), jamás en la base ni en el repo.
+- **Sin clave configurada:** no se persiste el mapeo (comportamiento seguro) y la sugerencia queda con
+  `redaction_map_stored=false`; la generación funciona igual (la redacción ya protegió lo que salió),
+  solo se pierde la rehidratación futura de esa sugerencia.
+- La **rehidratación efectiva** y la **rotación de la clave** quedan pendientes (ADR-0016).
 
 ## Gateway de IA, anti-inyección y auditoría (F1-T3)
 
@@ -52,8 +63,8 @@ y el gateway de IA (F1+).
 
 ## Estado
 
-Resumen fundacional (F0-T3a), ampliado en **F1-T3**: la **capa de redacción**, el **gateway
-`AIProvider`** (Claude), el **ensamblado anti-inyección** y la **bitácora de llamadas** ya están
-implementados (andamiaje; sin función de producto aún — F1-T4). Los campos de clasificación/política
-viven en la entidad `projects` (`ai_policy`, aún reservada). Pendiente: redacción de PII/IPs por
-clasificación, persistencia cifrada del mapeo marcador→valor y retención/purga de la bitácora.
+Resumen fundacional (F0-T3a), ampliado en **F1-T3** (redacción, gateway `AIProvider`/Claude, ensamblado
+anti-inyección, bitácora) y **F1-T4a**: primera función de producto (sugerencias de IA con procedencia,
+ADR-0003/0004), con **persistencia cifrada del mapeo** de redacción (ADR-0016) y lectura de
+`projects.ai_policy` (`model`) con fallback al `.env`. Pendiente: redacción de PII/IPs por clasificación,
+rehidratación efectiva + rotación de la clave de cifrado, y retención/purga de la bitácora y del mapeo.

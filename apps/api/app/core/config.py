@@ -78,6 +78,13 @@ class Settings(BaseSettings):
     # Timeout (segundos) de la llamada al proveedor.
     anthropic_timeout_seconds: float = 30.0
 
+    # ── Cifrado del mapeo de redacción marcador→valor (F1-T4a, ADR-0016) ──
+    # Clave Fernet (urlsafe base64 de 32 bytes). VACÍA por defecto => el mapeo de redacción NO se
+    # persiste (comportamiento seguro: nunca se escribe en claro) y la generación degrada avisando.
+    # NUNCA se commitea. Generar con:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    encryption_key: str = ""
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_cors_origins(cls, value: object) -> object:

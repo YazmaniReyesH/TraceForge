@@ -16,10 +16,15 @@ from app.core.config import Settings
 
 
 class ClaudeProvider(AIProvider):
-    """Proveedor de IA sobre el SDK de Anthropic (Claude)."""
+    """Proveedor de IA sobre el SDK de Anthropic (Claude).
 
-    def __init__(self, settings: Settings) -> None:
+    ``model`` puede sobrescribir el de settings (p. ej. el que resuelve la ``ai_policy`` del
+    proyecto; ver ``dependencies.select_provider``). Sin override, se usa ``TF_ANTHROPIC_MODEL``.
+    """
+
+    def __init__(self, settings: Settings, *, model: str | None = None) -> None:
         self._settings = settings
+        self._model = model or settings.anthropic_model
 
     @property
     def name(self) -> str:
@@ -27,7 +32,7 @@ class ClaudeProvider(AIProvider):
 
     @property
     def model(self) -> str:
-        return self._settings.anthropic_model
+        return self._model
 
     @property
     def is_configured(self) -> bool:
@@ -47,7 +52,7 @@ class ClaudeProvider(AIProvider):
                 timeout=self._settings.anthropic_timeout_seconds,
             ) as client:
                 message = await client.messages.create(
-                    model=self._settings.anthropic_model,
+                    model=self._model,
                     max_tokens=max_tokens,
                     system=prompt.system,
                     messages=[{"role": "user", "content": prompt.user}],

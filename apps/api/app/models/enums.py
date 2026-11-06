@@ -40,6 +40,26 @@ class AICallStatus(StrEnum):
     NOT_CONFIGURED = "not_configured"  # no hay API key: se degradó sin llamar al proveedor
 
 
+class AISuggestionKind(StrEnum):
+    """Tipo de sugerencia de IA generada sobre la evidencia de una sesión (F1-T4a)."""
+
+    DESCRIPTION = "description"  # descripción de la evidencia de la sesión (la principal)
+    NEXT_STEP = "next_step"  # sugerencia de siguiente paso
+
+
+class AISuggestionStatus(StrEnum):
+    """Estado de una sugerencia de IA (ADR-0003: nace pendiente de revisión humana).
+
+    Máquina de estados (F1-T4a): ``pending`` → ``accepted`` o ``edited``; ``edited`` admite
+    re-edición (``edited`` → ``edited``) conservando siempre el contenido sugerido original;
+    ``accepted`` es terminal. Cualquier otra transición es un error de dominio (409).
+    """
+
+    PENDING = "pending"  # recién generada; aún no revisada por un humano
+    ACCEPTED = "accepted"  # un humano la aceptó tal cual
+    EDITED = "edited"  # un humano la editó (se conserva el original + el rastro de origen IA)
+
+
 def sql_in_clause(enum: type[StrEnum]) -> str:
     """Devuelve ``'a', 'b', ...`` con los valores del enum, para un CHECK ``IN``."""
     return ", ".join(repr(member.value) for member in enum)
