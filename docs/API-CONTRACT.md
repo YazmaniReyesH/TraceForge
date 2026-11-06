@@ -273,6 +273,56 @@ de configuración (`TF_ANTHROPIC_*`), nunca del cliente. Ver ficha [`modulos/ia.
 
 ---
 
+## Sugerencias de IA — `.../projects/{pid}/sessions/{sid}/suggestions` (F1-T4a)
+
+Primera función de IA **de producto** (ADR-0003/0004/0005/0016): a partir de la evidencia **real** de
+una sesión, la IA **propone** una `description` o un `next_step`. Toda sugerencia nace **`pending`**
+(ADR-0003) con procedencia completa; un humano la **acepta** o la **edita**. Bajo el **gate de
+proyecto** (aislamiento) y **CSRF** en mutaciones. El modelo se elige de la `ai_policy` del proyecto
+si está, con `TF_ANTHROPIC_*` como fallback. La respuesta **nunca** expone el mapeo cifrado ni valores
+crudos. Ver ficha [`modulos/ia.md`](./modulos/ia.md) y [`ai-tasks.md`](./ai-tasks.md).
+
+### POST `/suggestions`
+- **Permiso:** `projects:update` (contributor/lead; viewer no). **CSRF.** Hace una llamada **real y de
+  pago** al proveedor.
+- **Cuerpo:** `{ "kind": "description" | "next_step" }`.
+- Circuito: junta la evidencia de la sesión → **redacta** (ADR-0005) → **persiste el mapeo cifrado**
+  (ADR-0016; solo si hay secretos y clave) → **ensambla** (evidencia como dato no confiable) → **llama**
+  pidiendo **salida estructurada** → **valida la forma** (ADR-0004) → persiste en `pending` con
+  procedencia → **registra** en `ai_call_log` (F1-T3).
+- **201** → `AISuggestionRead` (ver forma abajo).
+- **409 `ai_no_evidence`** si la sesión no tiene evidencia. **502 `ai_invalid_output`** si el modelo
+  devolvió una forma inválida (no se persiste). **502 `ai_provider_error`** ante error de red/API.
+  **503 `ai_not_configured`** si falta `TF_ANTHROPIC_API_KEY` (degrada; registra el intento). **403**
+  viewer. **404** si no es miembro del project o la sesión no existe (aislamiento).
+
+### GET `/suggestions`
+- **Permiso:** `projects:read` (viewer+). Lista las sugerencias de la sesión (orden de creación).
+- **200** → `[AISuggestionRead]`.
+
+### POST `/suggestions/{suggestion_id}/accept`
+- **Permiso:** `projects:update`. **CSRF.** Transición **`pending` → `accepted`** (toma la sugerencia
+  tal cual). Registra `reviewed_by`/`reviewed_at`.
+- **200** → `AISuggestionRead`. **409 `ai_suggestion_invalid_transition`** si no estaba `pending`
+  (p. ej. ya aceptada/editada). **404** si no existe en esa sesión/project.
+
+### POST `/suggestions/{suggestion_id}/edit`
+- **Permiso:** `projects:update`. **CSRF.** Transición **`pending`|`edited` → `edited`**: guarda el
+  texto humano en `edited_content` **conservando** el `suggested_content` original y el rastro de
+  origen IA. `accepted` es terminal (no se edita).
+- **Cuerpo:** `{ "content": "<texto>" }`.
+- **200** → `AISuggestionRead`. **409 `ai_suggestion_invalid_transition`** si estaba `accepted`.
+  **404** si no existe.
+
+**Forma de respuesta** `AISuggestionRead` = `{ ai_suggestion_id, session_id, kind, status,
+suggested_content, suggested_payload, edited_content, provider, model, prompt_version, ai_call_log_id,
+input_refs, redaction_count, redaction_map_stored, reviewed_by, reviewed_at, created_by, created_at,
+updated_at }`. `suggested_content` (texto propuesto, inmutable) y `suggested_payload` (salida
+estructurada validada) son **seguros** (se generaron sobre evidencia redactada). `redaction_map_stored`
+es `false` si no hubo secretos **o** si faltaba `TF_ENCRYPTION_KEY` (degradación segura, ADR-0016).
+
+---
+
 ## Pendiente (próximas tandas)
 
 - **F0-T5:** token anti-CSRF; theming.

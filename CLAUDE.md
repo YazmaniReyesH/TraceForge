@@ -48,14 +48,14 @@ TraceForge/
         core/repository.py   # WorkspaceScopedRepository (filtro por workspace)
         core/integrity.py    # mapeo IntegrityError -> error de dominio (por constraint)
         core/constraints.py  # nombres de constraints centralizados
-        models/              # SQLAlchemy: user, workspace, project, membership, credential, session, evidence, ai_call_log, enums, types
-        ai/                  # gateway de IA (F1-T3): port AIProvider + Claude, redacción, ensamblado anti-inyección, bitácora, ping
+        models/              # SQLAlchemy: user, workspace, project, membership, credential, session, evidence, ai_call_log, ai_suggestion, ai_redaction_map, enums, types
+        ai/                  # gateway IA: port AIProvider+Claude, redacción, ensamblado anti-inyección, bitácora, ping (F1-T3); sugerencias con procedencia + mapeo cifrado (F1-T4a)
         auth/                # autenticación (F0-T4a): port AuthProvider + local, hashing, tokens, service, router
         workspaces/          # workspaces + membresías e invariantes de owner (F0-T4b): repo, service, router, schemas
         projects/            # CRUD de projects + membresías de proyecto (F0-T4b-2)
         timeline/            # sesiones + evidencia append-only (F1-T1): hashing, repo, service, router, schemas
         users/               # borrado seguro de usuario (invariante; sin endpoint de baja)
-      migrations/            # Alembic (async); versions/ con migraciones F0-T3b, F0-T4a, F1-T1, F1-T2 y F1-T3
+      migrations/            # Alembic (async); versions/ con migraciones F0-T3b, F0-T4a, F1-T1, F1-T2, F1-T3 y F1-T4a
       tests/
       alembic.ini
       pyproject.toml         # deps + ruff + mypy + pytest
@@ -181,7 +181,25 @@ existen: `seguridad-datos.md`, `ai-tasks.md` (registro de funciones de IA), `mod
 
 ## Estado actual
 
-**Fase 1 EN CURSO. F1-T3 (andamiaje de IA: gateway, redacción, ensamblado, bitácora — solo backend).**
+**Fase 1 EN CURSO. F1-T4a (1ª función de IA de producto: sugerencias — solo backend).**
+Sobre el andamiaje de F1-T3, **sugerencias de IA** a partir de la evidencia **real** de una sesión: dos
+AI tasks (`description`, `next_step`) con **salida estructurada validada** (ADR-0004) que nacen
+**`pending`** con **procedencia completa** (ADR-0003: proveedor, modelo resuelto, versión de prompt,
+`ai_call_log_id`, `input_refs`) y máquina de estados `pending→accepted/edited` (`accepted` terminal;
+edición conserva el original + el rastro IA). Circuito en `AISuggestionService`: juntar evidencia →
+**redactar** → **persistir el mapeo cifrado** (Fernet, `TF_ENCRYPTION_KEY`; ADR-0016) → **ensamblar**
+anti-inyección → **llamar** (modelo de `ai_policy` o `.env`) → **validar la forma** → persistir →
+**registrar** en la bitácora. Dos tablas nuevas: `ai_suggestions` y `ai_redaction_maps` (mapeo
+**cifrado**, nunca en claro; sin clave no se persiste y degrada avisando). Endpoints bajo la sesión
+(`…/sessions/{sid}/suggestions` + `/accept` + `/edit`): generar/aceptar/editar → `projects:update`
+(viewer no); listar → `projects:read`; CSRF; aislamiento. **Sin UI ni violeta de IA (F1-T4b), sin
+rehidratación efectiva, sin otros proveedores.** **Migración F1-T4a generada, sin aplicar**
+(`f3a1c9d7b2e4`: crea `ai_suggestions` + `ai_redaction_maps`). Pruebas con **doble del puerto** (no
+llaman a la API real; se omiten contra BD hasta aplicar la migración). Nueva dependencia:
+`cryptography` (Fernet). Ver `docs/modulos/ia.md`, `docs/ai-tasks.md`, `docs/API-CONTRACT.md`,
+`docs/seguridad-datos.md`, ADR-0016.
+
+**F1-T3 (andamiaje de IA: gateway, redacción, ensamblado, bitácora — solo backend).**
 Puerto **`AIProvider`** (dominio, patrón port/adapter como `AuthProvider`) con **Claude** detrás (SDK
 `anthropic`, import perezoso; "IA no configurada" degrada sin romper). Capa de **redacción**
 determinista de secretos (marcadores estables, preserva estructura; PEM/JWT/`sk-`/`AKIA`/`Bearer`/

@@ -1,11 +1,13 @@
 # Ficha de módulo: ia (gateway de IA)
 
-- **Fase / tanda:** F1-T3 (andamiaje de IA: puerto, redacción, ensamblado, bitácora, ping)
-- **Estado del módulo:** gateway `AIProvider` con Claude detrás del puerto; capa de **redacción** de
-  secretos determinista; **ensamblado** de prompt con la evidencia como dato no confiable; **bitácora**
-  de llamadas (`ai_call_log`); y un **ping verificable** con contenido sintético. **Sin función de
-  producto** (sugerir paso / generar descripción es F1-T4), **sin UI**, **sin frontend**.
-- **Última actualización:** 2026-11-05
+- **Fase / tanda:** F1-T3 (andamiaje) · **F1-T4a** (1ª función de producto: sugerencias, solo backend)
+- **Estado del módulo:** gateway `AIProvider` con Claude detrás del puerto; **redacción** determinista
+  de secretos; **ensamblado** anti-inyección; **bitácora** (`ai_call_log`); **ping verificable**; y
+  **sugerencias de IA** (`description` / `next_step`) a partir de la evidencia **real** de una sesión,
+  con **procedencia** (ADR-0003), **salida estructurada validada** (ADR-0004) y **mapeo de redacción
+  cifrado** (ADR-0016), más su máquina de estados (pending→accepted/edited). **Sin UI ni el violeta de
+  IA** (F1-T4b), sin rehidratación efectiva, sin otros proveedores.
+- **Última actualización:** 2026-11-06
 
 ## Propósito
 
@@ -19,18 +21,25 @@ ensamblado anti-inyección y la bitácora, y los verifica con un ping real a Cla
 
 ```
 app/ai/
-  port.py            # Puerto AIProvider (dominio): AIPrompt, AICompletion, complete()/name/model/is_configured
-  claude_provider.py # Implementación Claude (SDK anthropic, import perezoso) detrás del puerto
-  errors.py          # AIError, AINotConfiguredError (503), AIProviderError (502) — sin secretos
-  redaction.py       # redact(text) -> RedactionResult (texto redactado + mapa en memoria + conteo)
-  prompt.py          # assemble_prompt(instruction, evidence): evidencia delimitada como dato no confiable
-  schemas.py         # AIStatusRead, AIPingResult
-  repository.py      # AICallLogRepository (acotado a workspace+project) — solo inserta
-  service.py         # AIService: redactar → ensamblar → proveedor → bitácora (+ ping sintético)
-  dependencies.py    # get_ai_provider (seleccionable), get_ai_service (sobre get_project_context)
-  router.py          # /api/v1/workspaces/{wid}/projects/{pid}/ai  (GET /status, POST /ping)
+  port.py             # Puerto AIProvider (dominio): AIPrompt, AICompletion, complete()/name/model/is_configured
+  claude_provider.py  # Implementación Claude (SDK anthropic, import perezoso); model override (ai_policy)
+  errors.py           # AIError + AINotConfigured(503)/AIProvider(502)/AIInvalidOutput(502)/AINoEvidence(409)/…
+  redaction.py        # redact(text) -> RedactionResult (texto redactado + mapa en memoria + conteo)
+  prompt.py           # assemble_prompt(instruction, evidence): evidencia delimitada como dato no confiable
+  crypto.py           # RedactionCipher (Fernet): cifra/descifra el mapeo marcador→valor (ADR-0016)
+  tasks.py            # Registro de AI tasks (description/next_step): prompt versionado + salida validada
+  schemas.py          # AIStatusRead, AIPingResult, AISuggestion{Generate,Edit,Read}
+  repository.py       # AICallLogRepository (acotado a workspace+project) — solo inserta
+  suggestions_repository.py  # AISuggestionRepository (sugerencias + mapeo cifrado) — aislado
+  service.py          # AIService: redactar → ensamblar → proveedor → bitácora (+ ping sintético)
+  suggestions_service.py     # AISuggestionService: generar/aceptar/editar (circuito F1-T4a)
+  dependencies.py     # get_ai_provider (lee ai_policy), get_redaction_cipher, get_ai_(suggestion_)service
+  router.py           # /…/ai  (GET /status, POST /ping)
+  suggestions_router.py      # /…/sessions/{sid}/suggestions (POST, GET, {id}/accept, {id}/edit)
 app/models/
-  ai_call_log.py     # AICallLog (tabla ai_call_log)
+  ai_call_log.py      # AICallLog (tabla ai_call_log)
+  ai_suggestion.py    # AISuggestion (tabla ai_suggestions): contenido + procedencia + estado
+  ai_redaction_map.py # AIRedactionMap (tabla ai_redaction_maps): mapeo marcador→valor CIFRADO
 ```
 
 Respeta las capas `router → service → repository`. El servicio **arma el prompt** (redacción +
@@ -107,46 +116,103 @@ Una fila por llamada (append-only en la práctica). **Qué guarda y por qué:** 
 `redaction_count`, `error_code` (código estable, sin secretos), `created_by` (FK RESTRICT),
 `created_at`. **Nunca** guarda el contenido crudo, el mapeo marcador→valor, ni la API key.
 
+## Función de producto: sugerencias de IA (F1-T4a)
+
+Primera función de IA de cara al producto: a partir de la evidencia **real** de una sesión, genera una
+sugerencia (`description` o `next_step`) que **nace `pending`** y que el usuario **acepta** o **edita**.
+
+**Flujo del servicio** (`AISuggestionService.generate`, respeta router→service→repository):
+
+1. **Junta** la evidencia viva de la sesión (reutiliza `TimelineRepository`, sin duplicar queries).
+   Sesión vacía → `ai_no_evidence` (409).
+2. **Redacta** (ADR-0005) — nunca sale un secreto crudo al proveedor.
+3. **Persiste el mapeo cifrado** (ADR-0016) asociado a la sugerencia (solo si hay secretos y clave).
+4. **Ensambla** el prompt con la evidencia como dato no confiable (nonce, anti-inyección).
+5. **Llama** al `AIProvider` pidiendo **salida estructurada** (JSON). Modelo según `ai_policy` o `.env`.
+6. **Valida la forma** (ADR-0004, `tasks.py`): si no cumple el schema → `ai_invalid_output` (502), no
+   se persiste. IA no configurada → `ai_not_configured` (503); error del proveedor → `ai_provider_error`
+   (502). Los tres casos **se registran** en `ai_call_log` (intento auditado).
+7. **Persiste** la sugerencia en `pending` con **procedencia completa** (ADR-0003): proveedor, modelo
+   **resuelto** (el que devolvió la API), versión de prompt, `ai_call_log_id` y `input_refs` (la
+   evidencia usada: ids+versión). **Registra** la llamada en la bitácora.
+
+**Procedencia y conservación (ADR-0003):** el `suggested_content` original **nunca** se sobrescribe; la
+edición humana vive en `edited_content` y conserva el rastro de IA. La evidencia cruda jamás se
+sustituye por la narrativa. **Máquina de estados:** `pending → accepted` | `pending|edited → edited`
+(admite re-edición); `accepted` es terminal; otra transición → `ai_suggestion_invalid_transition` (409).
+Cada transición guarda `reviewed_by`/`reviewed_at`.
+
+**Cifrado del mapeo (ADR-0016):** el mapa `marcador→valor real` se cifra con **Fernet** (`crypto.py`)
+y se guarda en `ai_redaction_maps` (**nunca en claro**). La clave vive en `TF_ENCRYPTION_KEY` (ver
+`.env.example`; generar con `Fernet.generate_key()`). **Sin clave:** no se persiste el mapeo (seguro)
+y la sugerencia queda con `redaction_map_stored=false` para que la UI avise; la generación sí funciona.
+
+**Selección de modelo/proveedor (`ai_policy`):** `get_ai_provider` lee `projects.ai_policy` (`model`)
+con `TF_ANTHROPIC_*` como fallback (hoy `ai_policy` suele venir vacía → fallback). Es la **base** de la
+futura selección desde UI; no construye lógica de política compleja. Aplica también al ping de F1-T3.
+
 ## Endpoints
 
-Ver [`../API-CONTRACT.md`](../API-CONTRACT.md) → *Gateway de IA*. Resumen:
-`GET /api/v1/workspaces/{wid}/projects/{pid}/ai/status` (estado de configuración; `projects:read`) y
-`POST …/ai/ping` (circuito completo con contenido sintético; `projects:update`; CSRF). El ping
-**siempre responde 200** con un `status` (`ok|error|not_configured`).
+Ver [`../API-CONTRACT.md`](../API-CONTRACT.md) → *Gateway de IA* y *Sugerencias de IA*. Resumen:
+`GET /…/ai/status` (`projects:read`), `POST /…/ai/ping` (`projects:update`; CSRF; siempre 200 con
+`status`); y bajo la sesión, `POST|GET /…/sessions/{sid}/suggestions` (generar/listar) y
+`POST …/suggestions/{id}/accept|edit` (transiciones). Generar/aceptar/editar → `projects:update`
+(viewer no); listar → `projects:read`. La respuesta nunca expone el mapeo cifrado ni valores crudos.
 
 ## Migración
 
 - **F1-T3** `20261105_1200-b7d9e1c4a2f5_crear_bitacora_de_llamadas_de_ia.py` (down_revision
-  `9c3e71a2f4b8`). **Hand-written** (create table): crea `ai_call_log` con sus FKs (CASCADE en
-  workspace/project; RESTRICT en `created_by`), el CHECK nombrado de `status` y los índices de
-  `workspace_id`/`project_id`. Reversible. **Pendiente de aplicar por el equipo** (`task db-upgrade`);
-  Claude no la aplica.
+  `9c3e71a2f4b8`). Crea `ai_call_log`. **Aplicada por el equipo** (la BD de dev está en
+  `b7d9e1c4a2f5`).
+- **F1-T4a** `20261106_0900-f3a1c9d7b2e4_crear_sugerencias_de_ia_y_mapeo_cifrado.py` (down_revision
+  `b7d9e1c4a2f5`). **Hand-written** (create tables): crea `ai_suggestions` (CHECK nombrados de
+  `kind`/`status`; FKs CASCADE en workspace/project/session, RESTRICT en `created_by`/`reviewed_by`,
+  SET NULL en `ai_call_log_id`; índices de aislamiento) y `ai_redaction_maps` (mapeo cifrado; FK CASCADE
+  a la sugerencia). Reversible. **Pendiente de aplicar por el equipo** (`task db-upgrade`); Claude no la
+  aplica.
 
 ## Pruebas
 
-`tests/test_ai.py`. **Unitarias (sin BD, sin red):** redacción de cada tipo de secreto con marcadores
-estables y sin romper estructura; texto plano / IPs intactos; ensamblado que delimita la evidencia
-como dato no confiable (y nonce único por llamada); `ClaudeProvider.is_configured` desde settings.
-**Contra la BD (con doble del puerto):** el circuito del ping en los tres estados (`ok` / `error` /
-`not_configured`) registra en la bitácora **sin secretos crudos** (hash de 64, `redaction_count>0`,
-sin la contraseña/clave sintéticas); `not_configured` no llama al proveedor; viewer no puede hacer
-ping (403) pero sí leer el estado; aislamiento (no miembro → 404). **Las pruebas NUNCA llaman a la API
-real:** sustituyen `get_ai_provider` por un `_FakeProvider`. Los escenarios contra la BD se **omiten**
-si falta el esquema (`run_db_test(..., requires="ai_call_log")`).
+`tests/test_ai.py` (F1-T3). **Unitarias (sin BD, sin red):** redacción de cada tipo de secreto con
+marcadores estables y sin romper estructura; texto plano / IPs intactos; ensamblado que delimita la
+evidencia (nonce único); `ClaudeProvider.is_configured`. **Contra la BD (doble del puerto):** el ping
+en los tres estados registra en la bitácora **sin secretos**; `not_configured` no llama; viewer 403 /
+no miembro 404.
 
-## Cómo configurar y verificar el ping real
+`tests/test_ai_suggestions.py` (F1-T4a). **Unitarias:** cifrado round-trip (el texto cifrado no
+contiene el secreto; se descifra igual) y cifrador no configurado sin clave; validación de la salida
+estructurada (válida, con ```fences```, y **rechazo** de forma inválida). **Contra la BD (doble del
+puerto):** generar crea `pending` con **procedencia** y la evidencia se **redacta antes de enviarse**
+(se verifica con el doble que recibió texto redactado y delimitado); el mapeo se persiste **cifrado**
+(y no en claro) y se puede descifrar; **sin `TF_ENCRYPTION_KEY`** la sugerencia se crea pero el mapeo
+**no** se guarda (`redaction_map_stored=false`); `next_step` conserva su `rationale`; `not_configured`
+(503) / salida inválida (502) / sin evidencia (409) **no** persisten sugerencia; aceptar/editar
+transicionan y **conservan el original** + el rastro de IA; viewer 403 (pero lista); aislamiento 404.
+**Las pruebas NUNCA llaman a la API real** (`_FakeProvider` vía `app.dependency_overrides`). Los
+escenarios contra la BD se **omiten** si falta el esquema (`run_db_test(..., requires="ai_suggestions")`).
 
-1. En `apps/api/.env`: `TF_ANTHROPIC_API_KEY=<tu clave>` (opcional `TF_ANTHROPIC_MODEL`).
-2. `task up` y aplicar la migración: `task db-upgrade` (la aplica **el equipo**).
-3. `task dev-api`; autenticarse y crear workspace+project; `POST …/ai/ping` con el header CSRF.
-4. Sin la clave: el ping responde `status=not_configured` (degradación clara). Con la clave: `ok`,
-   con la respuesta real de Claude, `redaction_count>0` y el secreto sintético enmascarado.
+## Cómo configurar y verificar (ping y generación real)
+
+1. En `apps/api/.env`: `TF_ANTHROPIC_API_KEY=<tu clave>` (opcional `TF_ANTHROPIC_MODEL`) y
+   `TF_ENCRYPTION_KEY=<clave Fernet>` (generar con
+   `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`).
+2. `task up` y aplicar las migraciones: `task db-upgrade` (la aplica **el equipo**).
+3. `task dev-api`; autenticarse y crear workspace+project; **ping**: `POST …/ai/ping` (CSRF).
+4. **Generación real:** crear una sesión y uno o más ítems de evidencia; luego
+   `POST …/sessions/{sid}/suggestions` con `{"kind":"description"}` (CSRF). Devuelve la sugerencia
+   `pending` con procedencia; con `TF_ENCRYPTION_KEY` el mapeo queda cifrado (`redaction_map_stored=true`).
+   Aceptar/editar: `POST …/suggestions/{id}/accept` | `/edit`.
+5. Sin `TF_ANTHROPIC_API_KEY`: la generación responde `503 ai_not_configured` (degrada). Sin
+   `TF_ENCRYPTION_KEY`: la sugerencia se crea pero no se guarda el mapeo (`redaction_map_stored=false`).
 
 ## Pendiente / `[[POR LLENAR]]`
 
-- Funciones de producto de IA con procedencia y validación determinista (F1-T4): sugerir paso,
-  generar descripción, resumen — cada una registrada en [`../ai-tasks.md`](../ai-tasks.md).
-- Persistencia **cifrada** del mapeo marcador→valor (rehidratación) — F1-T4.
-- Política de IA por proyecto (`projects.ai_policy`): proveedores permitidos, imágenes, redacción
-  on/off por clasificación, redacción de PII/IPs.
+- UI y el **violeta de IA** (F1-T4b): pantallas para generar/revisar/aceptar/editar sugerencias.
+- **Rehidratación efectiva**: descifrar el mapeo y mostrar valores a un usuario autorizado (hoy solo
+  se persiste cifrado) + rotación de la clave (MultiFernet) — ADR-0016.
+- Más funciones de IA (resumen; CVSS/CWE/CVE/ATT&CK con validación contra catálogo, F2; traducción) —
+  cada una registrada en [`../ai-tasks.md`](../ai-tasks.md).
+- Política de IA por proyecto (`projects.ai_policy`) completa: proveedores permitidos, imágenes,
+  redacción on/off por clasificación, redacción de PII/IPs, **selección desde UI** (hoy solo se lee
+  `model` con fallback al `.env`).
 - `[[POR LLENAR: retención/purga de la bitácora de IA y del mapeo cifrado.]]`

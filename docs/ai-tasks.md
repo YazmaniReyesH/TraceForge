@@ -16,9 +16,10 @@ Reglas transversales (ADR-0003/0004/0005):
 
 ## Estado
 
-**F1-T3 no agrega ninguna función de producto de IA todavía** (sugerir paso, generar descripción,
-resumen… son **F1-T4**). F1-T3 construye el **andamiaje**: el puerto `AIProvider` (Claude), la
-redacción, el ensamblado anti-inyección y la bitácora. Ver la ficha [`modulos/ia.md`](./modulos/ia.md).
+**F1-T4a agrega las dos primeras funciones de producto de IA** (`description` y `next_step`), sobre el
+andamiaje de F1-T3 (puerto `AIProvider`/Claude, redacción, ensamblado anti-inyección, bitácora). Nacen
+`pending` con procedencia (ADR-0003) y usan **salida estructurada validada** (ADR-0004). La evidencia
+real pasa por **redacción** y su mapeo se guarda **cifrado** (ADR-0016). Ver [`modulos/ia.md`](./modulos/ia.md).
 
 ## Diagnóstico (no es una función de producto)
 
@@ -31,8 +32,28 @@ el ensamblado anti-inyección) contra Claude de verdad; **no** persiste la respu
 la devuelve en la respuesta HTTP) y **no** produce contenido para el proyecto. Detalle del ensamblado,
 la redacción y la bitácora: [`modulos/ia.md`](./modulos/ia.md) y ADR-0015.
 
-## Funciones de producto (F1-T4+)
+## Funciones de producto (F1-T4a)
 
-`[[POR LLENAR: sugerir-paso, generar-descripción, resumen-de-evidencia… cada una con su id, versión
-de prompt, JSON Schema de salida estricto, contexto permitido, capacidades y proveedores — se añaden
-al implementarlas en F1-T4.]]`
+Ambas comparten el patrón **sugerir → validar → persistir** (ADR-0004): la IA devuelve JSON; el
+servicio valida la forma contra el schema antes de persistir (si no cumple → `ai_invalid_output`, no se
+persiste). Contexto permitido: **solo la evidencia de la sesión indicada, ya redactada** (ADR-0005);
+no leen otras sesiones ni proyectos. Sin herramientas habilitadas para el modelo. Nacen `pending`
+(ADR-0003) con procedencia (proveedor, modelo resuelto, versión de prompt, `ai_call_log_id`,
+`input_refs`). Proveedor: Claude (`ai_policy.model` del proyecto si está; si no, `TF_ANTHROPIC_MODEL`).
+
+| id | Propósito | Prompt (versión) | JSON Schema de salida | Contexto |
+|---|---|---|---|---|
+| `description` | Describir la evidencia de la sesión (función principal) | `description/v1` | `{"description": string (≥1)}` | Evidencia de la sesión (redactada) |
+| `next_step` | Sugerir un siguiente paso y su justificación | `next_step/v1` | `{"next_step": string (≥1), "rationale": string (≥1)}` | Evidencia de la sesión (redactada) |
+
+- **Salida estructurada estricta:** se exige un objeto JSON con exactamente los campos del schema
+  (campos extra se ignoran; faltantes o vacíos → rechazo). El texto canónico de la sugerencia es
+  `description` / `next_step`; el resto del payload validado se conserva en `suggested_payload`.
+- **Capacidades requeridas:** salida estructurada (JSON) + contexto. **No** visión (no se envían
+  imágenes en esta tanda). **No** validación contra catálogos (no hay CWE/CVE/ATT&CK aquí; eso es F2,
+  pero el patrón de validación determinista ya queda listo).
+- **Transiciones** (ADR-0003): `pending → accepted` | `pending|edited → edited`; `accepted` terminal.
+  La edición humana se guarda aparte y conserva el contenido sugerido original + el rastro de IA.
+
+`[[POR LLENAR: resumen-de-evidencia, CVSS, CWE/CVE/ATT&CK, traducción… (F1-T4b+/F2), cada una con su
+id, versión de prompt, JSON Schema, contexto, capacidades y validación contra catálogo.]]`
