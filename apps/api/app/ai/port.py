@@ -14,15 +14,34 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class PromptBlock:
+    """Un bloque de texto del mensaje de usuario, con bandera de **prompt caching**.
+
+    ``cache=True`` marca un punto de caché (ADR-0015/prompt caching de Anthropic): el proveedor
+    pide cachear el prefijo hasta ese bloque. Útil para el **bloque grande de evidencia** cuando se
+    repite byte a byte entre llamadas (p. ej. un refresco ``force`` del mismo estado); reordenar o
+    editar la evidencia cambia el bloque e **invalida** la caché.
+    """
+
+    text: str
+    cache: bool = False
+
+
+@dataclass(frozen=True)
 class AIPrompt:
     """Prompt estructurado, independiente del proveedor.
 
     ``system``: instrucciones de sistema (rol + reglas anti-inyección).
-    ``user``: mensaje del usuario con la evidencia ya **redactada** y **delimitada**.
+    ``user``: mensaje del usuario con la evidencia ya **redactada** y **delimitada** (texto plano;
+    es lo que se registra en la bitácora).
+    ``user_blocks``: cuando está presente, el mensaje de usuario se envía como **bloques de
+    contenido** (para activar prompt caching en el bloque de evidencia). Si es ``None``, se envía
+    ``user`` como texto plano (comportamiento de F1-T3/T4a, sin caché).
     """
 
     system: str
     user: str
+    user_blocks: tuple[PromptBlock, ...] | None = None
 
 
 @dataclass(frozen=True)

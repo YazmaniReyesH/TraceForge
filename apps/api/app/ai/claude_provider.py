@@ -10,6 +10,8 @@ Petición mínima de "completar": no se envía ``temperature``/``thinking`` ni s
 herramientas para el modelo (tarea de IA = salida sin herramientas, skill ``backend-fastapi``).
 """
 
+from typing import Any
+
 from app.ai.errors import AINotConfiguredError, AIProviderError
 from app.ai.port import AICompletion, AIPrompt, AIProvider
 from app.core.config import Settings
@@ -46,6 +48,21 @@ class ClaudeProvider(AIProvider):
         except ImportError as exc:  # SDK ausente: error de dominio claro (no rompe el import)
             raise AIProviderError("El SDK de Anthropic no está instalado") from exc
 
+        # Si el prompt trae bloques, se envían como content blocks para activar prompt caching
+        # (``cache_control: ephemeral``) en el bloque marcado; si no, texto plano (F1-T3/T4a).
+        user_content: Any
+        if prompt.user_blocks is not None:
+            user_content = [
+                {
+                    "type": "text",
+                    "text": block.text,
+                    **({"cache_control": {"type": "ephemeral"}} if block.cache else {}),
+                }
+                for block in prompt.user_blocks
+            ]
+        else:
+            user_content = prompt.user
+
         try:
             async with anthropic.AsyncAnthropic(
                 api_key=self._settings.anthropic_api_key,
@@ -55,7 +72,7 @@ class ClaudeProvider(AIProvider):
                     model=self._model,
                     max_tokens=max_tokens,
                     system=prompt.system,
-                    messages=[{"role": "user", "content": prompt.user}],
+                    messages=[{"role": "user", "content": user_content}],
                 )
         except anthropic.APIStatusError as exc:
             # Mensaje seguro (sin cuerpo ni secretos): solo el código de estado.

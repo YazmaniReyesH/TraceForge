@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.ai.analysis_router import router as ai_analysis_router
 from app.ai.router import router as ai_router
 from app.ai.suggestions_router import router as ai_suggestions_router
 from app.auth.router import router as auth_router
@@ -84,6 +85,10 @@ def create_app() -> FastAPI:
     app.include_router(me_router)
     app.include_router(timeline_router)
     app.include_router(ai_router)
+    app.include_router(ai_analysis_router)
+    # F1-T4c (ADR-0017): el flujo de sugerencias (description/next_step + accept/edit) queda
+    # APARCADO (deprecado), sustituido por el análisis de contexto efímero. Se mantiene montado,
+    # marcado como deprecado en su router, por si se reutiliza en la fase de reporte.
     app.include_router(ai_suggestions_router)
 
     return app

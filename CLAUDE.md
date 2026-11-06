@@ -48,14 +48,14 @@ TraceForge/
         core/repository.py   # WorkspaceScopedRepository (filtro por workspace)
         core/integrity.py    # mapeo IntegrityError -> error de dominio (por constraint)
         core/constraints.py  # nombres de constraints centralizados
-        models/              # SQLAlchemy: user, workspace, project, membership, credential, session, evidence, ai_call_log, ai_suggestion, ai_redaction_map, enums, types
-        ai/                  # gateway IA: port AIProvider+Claude, redacción, ensamblado anti-inyección, bitácora, ping (F1-T3); sugerencias con procedencia + mapeo cifrado (F1-T4a)
+        models/              # SQLAlchemy: user, workspace, project, membership, credential, session, evidence, ai_call_log, session_analysis, ai_suggestion*/ai_redaction_map* (*aparcados), enums, types
+        ai/                  # gateway IA: port AIProvider+Claude, redacción, ensamblado anti-inyección, bitácora, ping (F1-T3); análisis de contexto efímero (F1-T4c); sugerencias (F1-T4a, aparcadas)
         auth/                # autenticación (F0-T4a): port AuthProvider + local, hashing, tokens, service, router
         workspaces/          # workspaces + membresías e invariantes de owner (F0-T4b): repo, service, router, schemas
         projects/            # CRUD de projects + membresías de proyecto (F0-T4b-2)
         timeline/            # sesiones + evidencia append-only (F1-T1): hashing, repo, service, router, schemas
         users/               # borrado seguro de usuario (invariante; sin endpoint de baja)
-      migrations/            # Alembic (async); versions/ con migraciones F0-T3b, F0-T4a, F1-T1, F1-T2, F1-T3 y F1-T4a
+      migrations/            # Alembic (async); versions/ con migraciones F0-T3b, F0-T4a, F1-T1, F1-T2, F1-T3, F1-T4a y F1-T4c
       tests/
       alembic.ini
       pyproject.toml         # deps + ruff + mypy + pytest
@@ -181,7 +181,27 @@ existen: `seguridad-datos.md`, `ai-tasks.md` (registro de funciones de IA), `mod
 
 ## Estado actual
 
-**Fase 1 EN CURSO. F1-T4a (1ª función de IA de producto: sugerencias — solo backend).**
+**Fase 1 EN CURSO. F1-T4c (rediseño de IA: análisis de contexto de sesión efímero — solo backend;
+ADR-0017).** Se **aparca** el flujo de sugerencias (`description`/`next_step` + accept/edit, F1-T4a/b):
+tablas `ai_suggestions`/`ai_redaction_maps` y su código **se conservan** (posible reuso en reporte),
+endpoints **deprecados** (sin migración destructiva). Lo reemplaza un **análisis efímero**: `POST
+…/sessions/{sid}/analyze` (con `force` opcional) lee la evidencia **activa en orden de `position`** y
+devuelve una **guía de 4 bloques** (`siguiente_objetivo`; `evaluacion{estado_actual, evidencia_observada}`;
+`validacion_sugerida[{comando, para_que?}]`; `precauciones[]` + `fase_detectada`) **validada** (ADR-0004);
+`GET …/sessions/{sid}/analysis` devuelve el último sin llamar al LLM. Circuito en `SessionAnalysisService`:
+orden → **redactar** (ADR-0005) → **hash-guard** (hash del estado: ítems activos id+versión+posición, en
+orden + versión de prompt; si coincide y no hay `force`, devuelve caché **sin llamar**) → **ensamblar**
+anti-inyección con **prompt caching** del bloque de evidencia (frontera determinista) → **llamar**
+(modelo de `ai_policy` o `.env`) → **validar** → **cachear por sesión** (`ai_session_analyses`, una fila;
+hash, resultado JSONB, procedencia, mapeo **cifrado** ADR-0016 o nada sin clave) → **registrar**
+(`ai_call_log`). Permisos: analizar → `projects:update` (viewer no); leer último → `projects:read`
+(viewer+); CSRF; aislamiento. Sin evidencia → `ai_no_evidence`; salida inválida → `ai_invalid_output`
+(no se entrega ni cachea). **Migración F1-T4c generada, sin aplicar** (`a4e8c21f9b63`: crea
+`ai_session_analyses`; no borra nada). Pruebas con **doble del puerto** (sin API real; se omiten contra
+BD hasta aplicar la migración). **Sin UI (F1-T4d) ni frontend.** `task lint typecheck test` en verde. Ver
+`docs/modulos/ia.md`, `docs/ai-tasks.md`, `docs/API-CONTRACT.md`, ADR-0017.
+
+**F1-T4a (1ª función de IA de producto: sugerencias — solo backend).**
 Sobre el andamiaje de F1-T3, **sugerencias de IA** a partir de la evidencia **real** de una sesión: dos
 AI tasks (`description`, `next_step`) con **salida estructurada validada** (ADR-0004) que nacen
 **`pending`** con **procedencia completa** (ADR-0003: proveedor, modelo resuelto, versión de prompt,

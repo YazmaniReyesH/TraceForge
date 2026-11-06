@@ -31,10 +31,17 @@ class AIInvalidOutputError(AIError):
 
 
 class AINoEvidenceError(AIError):
-    # No hay evidencia en la sesión sobre la cual generar una sugerencia.
+    # No hay evidencia activa en la sesión sobre la cual trabajar (generar o analizar).
     code = "ai_no_evidence"
     status_code = 409
-    default_message = "La sesión no tiene evidencia sobre la cual generar una sugerencia"
+    default_message = "La sesión no tiene evidencia activa sobre la cual trabajar"
+
+
+class AINoAnalysisError(AIError):
+    # Todavía no se ha generado un análisis para esta sesión (GET del último sin llamar a la API).
+    code = "ai_no_analysis"
+    status_code = 404
+    default_message = "La sesión aún no tiene un análisis de contexto"
 
 
 class AISuggestionInvalidTransitionError(AIError):

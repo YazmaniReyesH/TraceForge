@@ -60,6 +60,20 @@ class AISuggestionStatus(StrEnum):
     EDITED = "edited"  # un humano la editó (se conserva el original + el rastro de origen IA)
 
 
+class SessionPhase(StrEnum):
+    """Fase del pentest inferida por la IA a partir de la evidencia de la sesión (F1-T4c).
+
+    Valor **sugerido** por el modelo y **validado** por el código (ADR-0004): la salida del análisis
+    debe traer exactamente uno de estos valores o se rechaza como forma inválida.
+    """
+
+    RECON = "recon"
+    ENUMERATION = "enumeración"
+    FOOTHOLD = "foothold"
+    PRIVESC = "privesc"
+    OTHER = "otra"
+
+
 def sql_in_clause(enum: type[StrEnum]) -> str:
     """Devuelve ``'a', 'b', ...`` con los valores del enum, para un CHECK ``IN``."""
     return ", ".join(repr(member.value) for member in enum)

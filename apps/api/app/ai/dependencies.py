@@ -5,6 +5,8 @@ from typing import Any
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.analysis_repository import SessionAnalysisRepository
+from app.ai.analysis_service import SessionAnalysisService
 from app.ai.claude_provider import ClaudeProvider
 from app.ai.crypto import RedactionCipher
 from app.ai.port import AIProvider
@@ -94,5 +96,32 @@ def get_ai_suggestion_service(
         suggestions=suggestion_repo,
         session=session,
         max_tokens=settings.anthropic_max_tokens,
+        user_id=context.user.user_id,
+    )
+
+
+def get_session_analysis_service(
+    context: ProjectContext = Depends(get_project_context),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+    provider: AIProvider = Depends(get_ai_provider),
+    cipher: RedactionCipher = Depends(get_redaction_cipher),
+) -> SessionAnalysisService:
+    # Ids de aislamiento e identidad salen del contexto (gate ya aplicado en el router).
+    log_repo = AICallLogRepository(
+        session, workspace_id=context.workspace_id, project_id=context.project_id
+    )
+    analysis_repo = SessionAnalysisRepository(
+        session, workspace_id=context.workspace_id, project_id=context.project_id
+    )
+    timeline_repo = TimelineRepository(session, context.project_id)
+    return SessionAnalysisService(
+        provider=provider,
+        cipher=cipher,
+        timeline=timeline_repo,
+        log_repo=log_repo,
+        analyses=analysis_repo,
+        session=session,
+        max_tokens=settings.anthropic_analysis_max_tokens,
         user_id=context.user.user_id,
     )

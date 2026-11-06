@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-4-5"
     # Tope de tokens de salida por llamada.
     anthropic_max_tokens: int = 1024
+    # Tope de tokens para el análisis de contexto de sesión (F1-T4c): la salida son 4 bloques, más
+    # grande que una sugerencia simple, así que tiene su propio tope para no truncar el JSON.
+    anthropic_analysis_max_tokens: int = 2048
     # Timeout (segundos) de la llamada al proveedor.
     anthropic_timeout_seconds: float = 30.0
 
